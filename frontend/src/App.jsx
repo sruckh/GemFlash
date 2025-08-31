@@ -291,9 +291,19 @@ function App() {
       // Create a File object from the blob
       const file = new File([blob], `composed-image-${image.id}.png`, { type: 'image/png' })
       
-      // Set the edit file and switch to edit tab
-      setEditFile(file)
-      setEditImageUrl(image.src)
+      // Add to edit model images and select it
+      const newModelImage = {
+        id: Date.now() + Math.random(),
+        src: image.src,
+        prompt: image.prompt || 'Composed image',
+        type: 'transferred'
+      }
+      
+      // Set the edit file and add to model images
+      setEditImage(file)
+      setEditImageUrl("") // Clear URL field when transferring composed images
+      setEditModelImages(prev => [newModelImage, ...prev])
+      setSelectedImageForEdit(newModelImage)
       setActiveTab('edit')
     } catch (error) {
       console.error('Error sending image to edit tab:', error)
@@ -366,6 +376,16 @@ function App() {
       } else {
         newSet.add(imageId)
       }
+      return newSet
+    })
+  }
+
+  // Remove image from compose selection
+  const removeComposeImage = (imageId) => {
+    setComposeImages(prev => prev.filter(img => img.id !== imageId))
+    setSelectedForCompose(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(imageId)
       return newSet
     })
   }
@@ -790,6 +810,19 @@ function App() {
                               onChange={() => toggleComposeSelection(image.id)}
                               className="w-5 h-5"
                             />
+                          </div>
+                          <div className="absolute top-2 right-2">
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeComposeImage(image.id)
+                              }}
+                              className="w-6 h-6 p-0 rounded-full"
+                            >
+                              ×
+                            </Button>
                           </div>
                           {selectedForCompose.has(image.id) && (
                             <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
