@@ -1,0 +1,11 @@
+services:
+  gemflash:
+    build: .
+    networks:
+      - shared_net
+    env_file:
+      - .env
+
+networks:
+  shared_net:
+    external: true
