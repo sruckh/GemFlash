@@ -111,6 +111,89 @@ const sendToEditTab = async (image) => {
 
 The application now provides a complete and optimized user experience across all tabs with proper image management workflows.
 
+### Aspect Ratio Implementation (Latest Update)
+
+**Issue**: The application was using pixel-based resolution settings (e.g., "1024x1024") which are not supported by the Gemini 2.5 Flash Image API. The API actually uses aspect ratio settings ("1:1", "16:9", etc.) to control image dimensions.
+
+**Root Cause**: The original implementation incorrectly assumed the Gemini API accepted pixel dimensions, but it actually requires aspect ratio parameters with predefined supported ratios.
+
+**Solution**: Updated both frontend and backend to use proper aspect ratio configuration for the Gemini 2.5 Flash Image API.
+
+**Implementation Details:**
+
+**Frontend Changes (`App.jsx`):**
+```javascript
+// Updated state to use aspect ratio instead of resolution
+const [resolution, setResolution] = useState("1:1")
+
+// Updated aspect ratio options with expected pixel dimensions
+const aspectRatios = [
+  { value: "1:1", label: "1:1 Square (1536×1536px) - Social Media Profile" },
+  { value: "16:9", label: "16:9 Widescreen (2816×1536px) - Desktop/Video" },
+  { value: "9:16", label: "9:16 Portrait (1536×2816px) - Mobile/Stories" },
+  { value: "4:3", label: "4:3 Standard (2048×1536px) - Photo Landscape" },
+  { value: "3:4", label: "3:4 Portrait (1536×2048px) - Social Posts" },
+]
+
+// Updated API calls to send aspect_ratio parameter
+body: JSON.stringify({ prompt: generatePrompt, aspect_ratio: resolution })
+formData.append('aspect_ratio', resolution)
+```
+
+**Backend Changes (`main.py`):**
+```python
+# Updated Pydantic models
+class ImageGenerationRequest(BaseModel):
+    prompt: str
+    aspect_ratio: str = "1:1"
+
+class ImageEditRequest(BaseModel):
+    prompt: str
+    image_urls: List[str] = []
+    aspect_ratio: str = "1:1"
+
+# Updated API endpoints to accept aspect_ratio parameter
+async def edit_image(
+    prompt: str = Form(...),
+    aspect_ratio: str = Form(default="1:1"),
+    image_urls: str = Form(default=""),
+    image_file: UploadFile = File(default=None)
+):
+
+# Updated Gemini API calls to use aspect_ratio configuration
+response = client.models.generate_content(
+    model="gemini-2.5-flash-image-preview",
+    contents={"parts": [{"text": detailed_prompt}]},
+    config=types.GenerateContentConfig(
+        response_modalities=["IMAGE"],
+        aspect_ratio=request.aspect_ratio  # Proper Gemini API parameter
+    )
+)
+```
+
+**Supported Aspect Ratios and Expected Dimensions:**
+- `1:1` → 1536 x 1536 px (Square, Social Media Profile Pictures)
+- `16:9` → 2816 x 1536 px (Widescreen, Desktop Wallpapers, Video Thumbnails)
+- `9:16` → 1536 x 2816 px (Portrait, Mobile Wallpapers, Instagram Stories)
+- `4:3` → 2048 x 1536 px (Standard Photo Landscape)
+- `3:4` → 1536 x 2048 px (Standard Photo Portrait, Social Media Posts)
+
+**Technical Benefits:**
+- ✅ Proper integration with Gemini 2.5 Flash Image API specifications
+- ✅ Accurate aspect ratio control for generated and edited images
+- ✅ Clear user understanding of output dimensions and use cases
+- ✅ Elimination of unsupported pixel dimension parameters
+- ✅ Consistent aspect ratio handling across Generate and Edit tabs
+
+**Testing Verification:**
+- ✅ Dropdown displays correct aspect ratio options with expected dimensions
+- ✅ Generate tab creates images with proper aspect ratios
+- ✅ Edit tab maintains aspect ratio consistency
+- ✅ API correctly passes aspect_ratio parameter to Gemini API
+- ✅ All existing functionality preserved with improved accuracy
+
+This change ensures the application properly utilizes the Gemini API's aspect ratio system rather than attempting to use unsupported resolution parameters, resulting in more predictable and accurate image generation outcomes.
+
 ### Loading Animations for Background Processes
 
 **Issue:** The application did not provide any visual feedback to the user when background processes (image generation, editing, and composition) were running. This could lead to confusion and a poor user experience.

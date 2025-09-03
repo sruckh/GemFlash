@@ -30,12 +30,12 @@ client = genai.Client(api_key=api_key)
 # Models
 class ImageGenerationRequest(BaseModel):
     prompt: str
-    resolution: str = "1024x1024"
+    aspect_ratio: str = "1:1"
 
 class ImageEditRequest(BaseModel):
     prompt: str
     image_urls: List[str] = []
-    resolution: str = "1024x1024"
+    aspect_ratio: str = "1:1"
 
 # Utility function to process image data
 def process_image_response(response):
@@ -96,7 +96,7 @@ def process_image_response(response):
 @api.post("/generate_image")
 async def generate_image(request: ImageGenerationRequest):
     try:
-        print(f"Generating image with prompt: {request.prompt}, resolution: {request.resolution}")
+        print(f"Generating image with prompt: {request.prompt}, aspect_ratio: {request.aspect_ratio}")
         
         try:
             print("Calling client.models.generate_content...")
@@ -118,7 +118,8 @@ Output: Return ONLY the final generated image. Do not return text."""
                 model="gemini-2.5-flash-image-preview",
                 contents={"parts": [{"text": detailed_prompt}]},
                 config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"]
+                    response_modalities=["IMAGE"],
+                    aspect_ratio=request.aspect_ratio
                 )
             )
             print(f"client.models.generate_content completed successfully")
@@ -146,7 +147,7 @@ Output: Return ONLY the final generated image. Do not return text."""
             return {
                 "message": "Image generated successfully",
                 "prompt": request.prompt,
-                "resolution": request.resolution,
+                "aspect_ratio": request.aspect_ratio,
                 "image": image_data
             }
         else:
@@ -161,7 +162,7 @@ Output: Return ONLY the final generated image. Do not return text."""
             return {
                 "message": "Image generation completed, but no image data found",
                 "prompt": request.prompt,
-                "resolution": request.resolution,
+                "aspect_ratio": request.aspect_ratio,
                 "response": response_text
             }
     except Exception as e:
@@ -171,7 +172,7 @@ Output: Return ONLY the final generated image. Do not return text."""
             "error": str(e),
             "error_type": type(e).__name__,
             "request_prompt": request.prompt,
-            "request_resolution": request.resolution
+            "request_aspect_ratio": request.aspect_ratio
         }
         if "text" in str(e).lower():
             error_details["additional_info"] = "This error suggests an issue with text processing in the response"
@@ -181,14 +182,14 @@ Output: Return ONLY the final generated image. Do not return text."""
 @api.post("/edit_image")
 async def edit_image(
     prompt: str = Form(...),
-    resolution: str = Form(default="1024x1024"),
+    aspect_ratio: str = Form(default="1:1"),
     image_urls: str = Form(default=""),
     image_file: UploadFile = File(default=None)
 ):
     try:
         print(f"Edit image request received:")
         print(f"  Prompt: {prompt}")
-        print(f"  Resolution: {resolution}")
+        print(f"  Aspect Ratio: {aspect_ratio}")
         print(f"  Image URLs: {repr(image_urls)}")
         print(f"  Image file: {image_file.filename if image_file else 'None'}")
         
@@ -257,7 +258,8 @@ Output: Return ONLY the final edited image. Do not return text."""
             model="gemini-2.5-flash-image-preview",
             contents={"parts": parts},
             config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"]
+                response_modalities=["IMAGE", "TEXT"],
+                aspect_ratio=aspect_ratio
             )
         )
         
@@ -267,7 +269,7 @@ Output: Return ONLY the final edited image. Do not return text."""
             return {
                 "message": "Image edited successfully",
                 "prompt": prompt,
-                "resolution": resolution,
+                "aspect_ratio": aspect_ratio,
                 "image": image_data
             }
         else:
@@ -292,6 +294,7 @@ Output: Return ONLY the final edited image. Do not return text."""
             "error": str(e),
             "error_type": type(e).__name__,
             "prompt": prompt if 'prompt' in locals() else None,
+            "aspect_ratio": aspect_ratio if 'aspect_ratio' in locals() else None,
             "has_image_file": image_file is not None and image_file.filename is not None,
             "has_image_urls": bool(image_urls.strip()) if 'image_urls' in locals() else False
         }

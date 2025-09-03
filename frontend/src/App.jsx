@@ -15,7 +15,7 @@ function App() {
   const [activeTab, setActiveTab] = useState("generate")
   
   // Generate tab state
-  const [resolution, setResolution] = useState("1024x1024")
+  const [resolution, setResolution] = useState("1:1")
   const [generatePrompt, setGeneratePrompt] = useState("")
   const [generatedImages, setGeneratedImages] = useState([])
   
@@ -44,13 +44,12 @@ function App() {
   const editFileRef = useRef(null)
   const composeFileRef = useRef(null)
 
-  const resolutions = [
-    { value: "1024x1024", label: "1024x1024 (Square)" },
-    { value: "1080x1080", label: "1080x1080 (Instagram Square)" },
-    { value: "1080x1350", label: "1080x1350 (Instagram Portrait)" },
-    { value: "1080x1920", label: "1080x1920 (Stories/Reels)" },
-    { value: "1280x720", label: "1280x720 (Landscape)" },
-    { value: "1200x627", label: "1200x627 (Facebook Link)" },
+  const aspectRatios = [
+    { value: "1:1", label: "1:1 Square (1536×1536px) - Social Media Profile" },
+    { value: "16:9", label: "16:9 Widescreen (2816×1536px) - Desktop/Video" },
+    { value: "9:16", label: "9:16 Portrait (1536×2816px) - Mobile/Stories" },
+    { value: "4:3", label: "4:3 Standard (2048×1536px) - Photo Landscape" },
+    { value: "3:4", label: "3:4 Portrait (1536×2048px) - Social Posts" },
   ]
 
   // Generate image handler
@@ -70,7 +69,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt: generatePrompt, resolution }),
+        body: JSON.stringify({ prompt: generatePrompt, aspect_ratio: resolution }),
       })
       
       const data = await response.json()
@@ -82,7 +81,7 @@ function App() {
           id: Date.now(),
           src: `data:image/png;base64,${data.image}`,
           prompt: generatePrompt,
-          resolution: resolution,
+          aspect_ratio: resolution,
           type: 'generated'
         }
         setGeneratedImages(prev => [newImage, ...prev])
@@ -117,7 +116,7 @@ function App() {
     try {
       const formData = new FormData()
       formData.append('prompt', editPrompt)
-      formData.append('resolution', resolution) // FIXED: Add missing resolution field
+      formData.append('aspect_ratio', resolution) // Use aspect_ratio parameter for Gemini API
       
       // Debug logging
       console.log('FormData contents:')
@@ -474,15 +473,15 @@ function App() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="resolution">Resolution</Label>
+                  <Label htmlFor="resolution">Aspect Ratio</Label>
                   <Select value={resolution} onValueChange={setResolution}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {resolutions.map((res) => (
-                        <SelectItem key={res.value} value={res.value}>
-                          {res.label}
+                      {aspectRatios.map((ratio) => (
+                        <SelectItem key={ratio.value} value={ratio.value}>
+                          {ratio.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
