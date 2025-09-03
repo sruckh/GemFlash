@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs"
 import { Checkbox } from "./components/ui/checkbox"
 import { Download, Image as ImageIcon, Edit3, Layers, Send, Upload, Sparkles } from 'lucide-react'
+import { PaintBrushOverlay, CameraCaptureOverlay, MergeImagesOverlay } from "./components/CreativeProcessingOverlays";
 
 function App() {
   // Tab state
@@ -35,6 +36,9 @@ function App() {
   // UI state
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   
   // File input refs
   const editFileRef = useRef(null)
@@ -57,6 +61,7 @@ function App() {
     }
 
     setLoading(true)
+    setIsGenerating(true)
     setError("")
     
     try {
@@ -89,6 +94,7 @@ function App() {
       setError("Failed to generate image: " + err.message)
     } finally {
       setLoading(false)
+      setIsGenerating(false)
     }
   }
 
@@ -105,6 +111,7 @@ function App() {
     }
 
     setLoading(true)
+    setIsEditing(true)
     setError("")
     
     try {
@@ -174,6 +181,7 @@ function App() {
       setError("Failed to edit image: " + err.message)
     } finally {
       setLoading(false)
+      setIsEditing(false)
     }
   }
 
@@ -191,6 +199,7 @@ function App() {
     }
 
     setLoading(true)
+    setIsComposing(true)
     setError("")
     
     try {
@@ -230,6 +239,7 @@ function App() {
       setError("Failed to compose images: " + err.message)
     } finally {
       setLoading(false)
+      setIsComposing(false)
     }
   }
 
@@ -413,6 +423,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PaintBrushOverlay open={isGenerating} />
+      <CameraCaptureOverlay open={isEditing} />
+      <MergeImagesOverlay open={isComposing} />
       {/* Header */}
       <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 py-4">

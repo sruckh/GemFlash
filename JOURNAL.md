@@ -110,3 +110,21 @@ const sendToEditTab = async (image) => {
 - ✅ All existing functionality preserved
 
 The application now provides a complete and optimized user experience across all tabs with proper image management workflows.
+
+### Loading Animations for Background Processes
+
+**Issue:** The application did not provide any visual feedback to the user when background processes (image generation, editing, and composition) were running. This could lead to confusion and a poor user experience.
+
+**Solution:** Implemented themed loading overlays for each of the "Generate", "Edit", and "Compose" tabs. These overlays are displayed when a background process starts and are hidden when the process completes.
+
+**Implementation Details:**
+
+*   **Created `CreativeProcessingOverlays.jsx`:** A new component file was created in `frontend/src/components/` to house the three new overlay components:
+    *   `PaintBrushOverlay`: For the "Generate" tab.
+    *   `CameraCaptureOverlay`: For the "Edit" tab.
+    *   `MergeImagesOverlay`: For the "Compose" tab.
+*   **State Management:** Added new state variables (`isGenerating`, `isEditing`, `isComposing`) to `App.jsx` to control the visibility of the overlays.
+*   **Updated Handler Functions:** Modified `handleGenerateImage`, `handleEditImage`, and `handleComposeImages` in `App.jsx` to set the corresponding loading state to `true` at the beginning of the process and `false` at the end.
+*   **CSS Fix:** Fixed a CSS issue in `frontend/src/index.css` where an `@import` statement was not at the top of the file, which was causing the build to fail.
+
+**Result:** The application now provides clear visual feedback to the user during background processing, improving the user experience and making the application feel more responsive.
