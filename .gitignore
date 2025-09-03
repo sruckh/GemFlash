@@ -59,3 +59,4 @@ docker-compose.override.yml
 .serena/memories/
 *.backup
 /.claude-flow/metrics/system-metrics.json
+**/.claude-flow/metrics/system-metrics.json
