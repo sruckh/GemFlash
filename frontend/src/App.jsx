@@ -16,7 +16,6 @@ import { UrlInputDialog } from "./components/UrlInputDialog";
 import { ToastProvider, toast } from "./components/ToastProvider";
 import { EnhancedImageCard } from "./components/EnhancedImageCard";
 import { ProcessingProgress } from "./components/ProcessingProgress";
-import { AIParameterControls } from "./components/AIParameterControls";
 
 function App() {
   // Tab state
@@ -26,12 +25,6 @@ function App() {
   const [resolution, setResolution] = useState("1:1")
   const [generatePrompt, setGeneratePrompt] = useState("")
   const [generatedImages, setGeneratedImages] = useState([])
-  const [aiParameters, setAiParameters] = useState({
-    quality: 85,
-    creativity: 50,
-    detail: 75,
-    speed: 60
-  })
   
   // Edit tab state
   const [editPrompt, setEditPrompt] = useState("")
@@ -100,8 +93,7 @@ function App() {
         },
         body: JSON.stringify({
           prompt: generatePrompt,
-          aspect_ratio: resolution,
-          parameters: aiParameters
+          aspect_ratio: resolution
         }),
       })
       
@@ -168,7 +160,6 @@ function App() {
       const formData = new FormData()
       formData.append('prompt', editPrompt)
       formData.append('aspect_ratio', resolution)
-      formData.append('parameters', JSON.stringify(aiParameters))
       
       // Use selected image if available
       if (selectedImageForEdit && editImage) {
@@ -268,7 +259,6 @@ function App() {
     try {
       const formData = new FormData()
       formData.append('prompt', composePrompt)
-      formData.append('parameters', JSON.stringify(aiParameters))
       
       // Add selected images
       selectedImages.forEach((img, index) => {
@@ -574,10 +564,6 @@ function App() {
                   />
                 </div>
 
-                <AIParameterControls
-                  onParametersChange={setAiParameters}
-                  defaultValues={aiParameters}
-                />
                 
                 <Button
                   onClick={handleGenerateImage}
@@ -701,10 +687,6 @@ function App() {
                   />
                 </div>
 
-                <AIParameterControls
-                  onParametersChange={setAiParameters}
-                  defaultValues={aiParameters}
-                />
 
                 <Button
                   onClick={handleEditImage}
@@ -813,10 +795,6 @@ function App() {
                   />
                 </div>
 
-                <AIParameterControls
-                  onParametersChange={setAiParameters}
-                  defaultValues={aiParameters}
-                />
 
                 <Button
                   onClick={handleComposeImages}
