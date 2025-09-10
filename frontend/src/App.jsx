@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from "./components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
 import { Textarea } from "./components/ui/textarea"
@@ -7,8 +7,16 @@ import { Label } from "./components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs"
 import { Checkbox } from "./components/ui/checkbox"
-import { Download, Image as ImageIcon, Edit3, Layers, Send, Upload, Sparkles } from 'lucide-react'
+import { Separator } from "./components/ui/separator"
+import { ScrollArea } from "./components/ui/scroll-area"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip"
+import { Download, Image as ImageIcon, Edit3, Layers, Send, Upload, Sparkles, Settings, Info, Plus, Trash2, Eye, Clock } from 'lucide-react'
 import { PaintBrushOverlay, CameraCaptureOverlay, MergeImagesOverlay } from "./components/CreativeProcessingOverlays";
+import { UrlInputDialog } from "./components/UrlInputDialog";
+import { ToastProvider, toast } from "./components/ToastProvider";
+import { EnhancedImageCard } from "./components/EnhancedImageCard";
+import { ProcessingProgress } from "./components/ProcessingProgress";
+import { AIParameterControls } from "./components/AIParameterControls";
 
 function App() {
   // Tab state
@@ -18,8 +26,14 @@ function App() {
   const [resolution, setResolution] = useState("1:1")
   const [generatePrompt, setGeneratePrompt] = useState("")
   const [generatedImages, setGeneratedImages] = useState([])
+  const [aiParameters, setAiParameters] = useState({
+    quality: 85,
+    creativity: 50,
+    detail: 75,
+    speed: 60
+  })
   
-  // Edit tab state  
+  // Edit tab state
   const [editPrompt, setEditPrompt] = useState("")
   const [editImage, setEditImage] = useState(null)
   const [editImageUrl, setEditImageUrl] = useState("")
@@ -39,6 +53,8 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState("processing");
   
   // File input refs
   const editFileRef = useRef(null)
@@ -55,13 +71,26 @@ function App() {
   // Generate image handler
   const handleGenerateImage = async () => {
     if (!generatePrompt.trim()) {
-      setError("Please enter a prompt")
+      toast.error("Please enter a prompt")
       return
     }
 
     setLoading(true)
     setIsGenerating(true)
+    setProcessingProgress(0)
+    setProcessingStage('processing')
     setError("")
+    
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setProcessingProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return 90
+        }
+        return prev + 10
+      })
+    }, 500)
     
     try {
       const response = await fetch('/api/generate_image', {
@@ -69,60 +98,77 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt: generatePrompt, aspect_ratio: resolution }),
+        body: JSON.stringify({
+          prompt: generatePrompt,
+          aspect_ratio: resolution,
+          parameters: aiParameters
+        }),
       })
       
       const data = await response.json()
+      clearInterval(progressInterval)
+      setProcessingProgress(100)
       
       if (data.error) {
-        setError(data.error)
+        toast.error(data.error)
       } else if (data.image) {
         const newImage = {
           id: Date.now(),
           src: `data:image/png;base64,${data.image}`,
           prompt: generatePrompt,
           aspect_ratio: resolution,
-          type: 'generated'
+          type: 'generated',
+          timestamp: new Date()
         }
         setGeneratedImages(prev => [newImage, ...prev])
         setGeneratePrompt("")
+        toast.success("Image generated successfully!")
       } else {
-        setError("No image generated")
+        toast.error("No image generated")
       }
     } catch (err) {
-      setError("Failed to generate image: " + err.message)
+      toast.error("Failed to generate image: " + err.message)
     } finally {
       setLoading(false)
       setIsGenerating(false)
+      setTimeout(() => setProcessingProgress(0), 1000)
     }
   }
 
   // Edit image handler
   const handleEditImage = async () => {
     if (!editPrompt.trim()) {
-      setError("Please enter an edit prompt")
+      toast.error("Please enter an edit prompt")
       return
     }
 
     if (!selectedImageForEdit && !editImage && !editImageUrl.trim()) {
-      setError("Please select an image to edit")
+      toast.error("Please select an image to edit")
       return
     }
 
     setLoading(true)
     setIsEditing(true)
+    setProcessingProgress(0)
+    setProcessingStage('processing')
     setError("")
+    
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setProcessingProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return 90
+        }
+        return prev + 10
+      })
+    }, 600)
     
     try {
       const formData = new FormData()
       formData.append('prompt', editPrompt)
-      formData.append('aspect_ratio', resolution) // Use aspect_ratio parameter for Gemini API
-      
-      // Debug logging
-      console.log('FormData contents:')
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}:`, value)
-      }
+      formData.append('aspect_ratio', resolution)
+      formData.append('parameters', JSON.stringify(aiParameters))
       
       // Use selected image if available
       if (selectedImageForEdit && editImage) {
@@ -139,20 +185,23 @@ function App() {
       })
       
       const data = await response.json()
+      clearInterval(progressInterval)
+      setProcessingProgress(100)
       
       if (!response.ok) {
         throw new Error(data.error || `HTTP error! status: ${response.status}`)
       }
       
       if (data.error) {
-        setError(data.error)
+        toast.error(data.error)
       } else if (data.image) {
         const newImage = {
           id: Date.now(),
           src: `data:image/png;base64,${data.image}`,
           prompt: editPrompt,
           type: 'edited',
-          originalImage: selectedImageForEdit
+          originalImage: selectedImageForEdit,
+          timestamp: new Date()
         }
         setEditedImages(prev => [newImage, ...prev])
         // Add new edited image to model cards and select it for potential further editing
@@ -165,6 +214,7 @@ function App() {
         setEditModelImages(prev => [newModelImage, ...prev])
         setSelectedImageForEdit(newModelImage)
         setEditPrompt("")
+        toast.success("Image edited successfully!")
         // Convert new image to file for next edit
         fetch(`data:image/png;base64,${data.image}`)
           .then(res => res.blob())
@@ -173,37 +223,52 @@ function App() {
             setEditImage(file)
           })
       } else {
-        setError("No edited image returned")
+        toast.error("No edited image returned")
       }
     } catch (err) {
       console.error("Edit image error:", err)
-      setError("Failed to edit image: " + err.message)
+      toast.error("Failed to edit image: " + err.message)
     } finally {
       setLoading(false)
       setIsEditing(false)
+      setTimeout(() => setProcessingProgress(0), 1000)
     }
   }
 
   // Compose images handler
   const handleComposeImages = async () => {
     if (!composePrompt.trim()) {
-      setError("Please enter a composition prompt")
+      toast.error("Please enter a composition prompt")
       return
     }
 
     const selectedImages = composeImages.filter(img => selectedForCompose.has(img.id))
     if (selectedImages.length === 0) {
-      setError("Please select at least one image for composition")
+      toast.error("Please select at least one image for composition")
       return
     }
 
     setLoading(true)
     setIsComposing(true)
+    setProcessingProgress(0)
+    setProcessingStage('processing')
     setError("")
+    
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setProcessingProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return 90
+        }
+        return prev + 10
+      })
+    }, 700)
     
     try {
       const formData = new FormData()
       formData.append('prompt', composePrompt)
+      formData.append('parameters', JSON.stringify(aiParameters))
       
       // Add selected images
       selectedImages.forEach((img, index) => {
@@ -218,27 +283,32 @@ function App() {
       })
       
       const data = await response.json()
+      clearInterval(progressInterval)
+      setProcessingProgress(100)
       
       if (data.error) {
-        setError(data.error)
+        toast.error(data.error)
       } else if (data.image) {
         const newImage = {
           id: Date.now(),
           src: `data:image/png;base64,${data.image}`,
           prompt: composePrompt,
-          type: 'composed'
+          type: 'composed',
+          timestamp: new Date()
         }
         setComposedImages(prev => [newImage, ...prev])
         setComposePrompt("")
         setSelectedForCompose(new Set())
+        toast.success("Images composed successfully!")
       } else {
-        setError("No composed image returned")
+        toast.error("No composed image returned")
       }
     } catch (err) {
-      setError("Failed to compose images: " + err.message)
+      toast.error("Failed to compose images: " + err.message)
     } finally {
       setLoading(false)
       setIsComposing(false)
+      setTimeout(() => setProcessingProgress(0), 1000)
     }
   }
 
@@ -364,8 +434,7 @@ function App() {
   }
 
   // Handle compose URL upload
-  const handleComposeUrlAdd = () => {
-    const url = prompt("Enter image URL:")
+  const handleComposeUrlAdd = (url) => {
     if (url && url.trim()) {
       const newImage = {
         id: Date.now(),
@@ -373,6 +442,7 @@ function App() {
         name: `image-${Date.now()}`
       }
       setComposeImages(prev => [newImage, ...prev])
+      toast.success("Image added from URL")
     }
   }
 
@@ -421,7 +491,12 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <ToastProvider>
+      <ProcessingProgress
+        open={isGenerating || isEditing || isComposing}
+        progress={processingProgress}
+        stage={processingStage}
+      />
       <PaintBrushOverlay open={isGenerating} />
       <CameraCaptureOverlay open={isEditing} />
       <MergeImagesOverlay open={isComposing} />
@@ -498,9 +573,14 @@ function App() {
                     className="min-h-[100px]"
                   />
                 </div>
+
+                <AIParameterControls
+                  onParametersChange={setAiParameters}
+                  defaultValues={aiParameters}
+                />
                 
-                <Button 
-                  onClick={handleGenerateImage} 
+                <Button
+                  onClick={handleGenerateImage}
                   disabled={loading || !generatePrompt.trim()}
                   className="w-full"
                 >
@@ -509,6 +589,8 @@ function App() {
               </CardContent>
             </Card>
 
+            <Separator />
+
             {/* Generated Images Gallery */}
             {generatedImages.length > 0 && (
               <Card>
@@ -516,33 +598,19 @@ function App() {
                   <CardTitle>Generated Images</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {generatedImages.map((image) => (
-                      <Card key={image.id} className="overflow-hidden">
-                        <div className="aspect-square relative">
-                          <img 
-                            src={image.src} 
-                            alt={image.prompt}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <CardContent className="p-3">
-                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{image.prompt}</p>
-                          <div className="flex gap-1 flex-wrap">
-                            <Button size="sm" variant="outline" onClick={() => sendToEdit(image)}>
-                              <Edit3 className="w-3 h-3 mr-1" /> Edit
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => sendToCompose(image)}>
-                              <Layers className="w-3 h-3 mr-1" /> Compose
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => downloadImage(image)}>
-                              <Download className="w-3 h-3 mr-1" /> Download
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-[600px] w-full rounded-md border p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {generatedImages.map((image) => (
+                        <EnhancedImageCard
+                          key={image.id}
+                          image={image}
+                          onSendToEdit={sendToEdit}
+                          onSendToCompose={sendToCompose}
+                          onDownload={downloadImage}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             )}
@@ -558,21 +626,25 @@ function App() {
               <CardContent className="space-y-4">
                 {/* Show selected image preview */}
                 {selectedImageForEdit && (
-                  <div className="border rounded-lg p-4 bg-gray-50">
-                    <Label className="text-sm font-medium text-gray-700 mb-2 block">Selected Image:</Label>
-                    <div className="flex items-center gap-3">
-                      <img 
-                        src={selectedImageForEdit.src} 
-                        alt="Selected" 
-                        className="w-16 h-16 object-cover rounded-lg border"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {selectedImageForEdit.prompt || 'Ready for editing'}
-                        </p>
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={selectedImageForEdit.src}
+                          alt="Selected"
+                          className="w-16 h-16 object-cover rounded-lg border"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">
+                            Selected Image
+                          </p>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {selectedImageForEdit.prompt || 'Ready for editing'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -593,7 +665,8 @@ function App() {
                               id: Date.now(),
                               src: e.target.result,
                               prompt: file.name,
-                              type: 'uploaded'
+                              type: 'uploaded',
+                              timestamp: new Date()
                             }
                             setEditModelImages(prev => [newImage, ...prev])
                             setSelectedImageForEdit(newImage)
@@ -615,6 +688,8 @@ function App() {
                   </div>
                 </div>
 
+                <Separator />
+
                 <div>
                   <Label htmlFor="edit-prompt">Edit Prompt</Label>
                   <Textarea
@@ -626,8 +701,13 @@ function App() {
                   />
                 </div>
 
-                <Button 
-                  onClick={handleEditImage} 
+                <AIParameterControls
+                  onParametersChange={setAiParameters}
+                  defaultValues={aiParameters}
+                />
+
+                <Button
+                  onClick={handleEditImage}
                   disabled={loading || !editPrompt.trim() || (!selectedImageForEdit && !editImage && !editImageUrl.trim())}
                   className="w-full"
                 >
@@ -636,7 +716,9 @@ function App() {
               </CardContent>
             </Card>
 
-            {/* Image Model Cards - moved to bottom for consistency */}
+            <Separator />
+
+            {/* Image Model Cards */}
             {editModelImages.length > 0 && (
               <Card>
                 <CardHeader>
@@ -644,62 +726,25 @@ function App() {
                   <CardDescription>Select an image to edit</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {editModelImages.map((image) => (
-                      <Card 
-                        key={image.id} 
-                        className={`overflow-hidden cursor-pointer transition-all ${
-                          selectedImageForEdit?.id === image.id 
-                            ? 'ring-2 ring-blue-500 bg-blue-50' 
-                            : 'hover:shadow-md'
-                        }`}
-                        onClick={() => selectImageForEdit(image)}
-                      >
-                        <div className="aspect-square relative">
-                          <img 
-                            src={image.src} 
-                            alt={image.prompt || 'Image'}
-                            className="w-full h-full object-cover"
-                          />
-                          {selectedImageForEdit?.id === image.id && (
-                            <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                              <div className="bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium">
-                                Selected
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <CardContent className="p-3">
-                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                            {image.prompt || 'Transferred image'}
-                          </p>
-                          <div className="flex gap-1 flex-wrap">
-                            <Button size="sm" variant="outline" onClick={(e) => {
-                              e.stopPropagation()
-                              selectImageForEdit(image)
-                            }}>
-                              <Edit3 className="w-3 h-3 mr-1" /> Select
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={(e) => {
-                              e.stopPropagation()
-                              downloadImage(image)
-                            }}>
-                              <Download className="w-3 h-3 mr-1" /> Download
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={(e) => {
-                              e.stopPropagation()
-                              removeImageFromEditModel(image.id)
-                            }}>
-                              ×
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {editModelImages.map((image) => (
+                        <EnhancedImageCard
+                          key={image.id}
+                          image={image}
+                          onSendToEdit={selectImageForEdit}
+                          onDownload={downloadImage}
+                          onRemove={removeImageFromEditModel}
+                          showRemove={true}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             )}
+
+            <Separator />
 
             {/* Edited Images Gallery */}
             {editedImages.length > 0 && (
@@ -708,30 +753,18 @@ function App() {
                   <CardTitle>Edited Images</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {editedImages.map((image) => (
-                      <Card key={image.id} className="overflow-hidden">
-                        <div className="aspect-square relative">
-                          <img 
-                            src={image.src} 
-                            alt={image.prompt}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <CardContent className="p-3">
-                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{image.prompt}</p>
-                          <div className="flex gap-1 flex-wrap">
-                            <Button size="sm" variant="outline" onClick={() => sendToCompose(image)}>
-                              <Layers className="w-3 h-3 mr-1" /> Compose
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => downloadImage(image)}>
-                              <Download className="w-3 h-3 mr-1" /> Download
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {editedImages.map((image) => (
+                        <EnhancedImageCard
+                          key={image.id}
+                          image={image}
+                          onSendToCompose={sendToCompose}
+                          onDownload={downloadImage}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             )}
@@ -759,11 +792,15 @@ function App() {
                   </div>
                   <div>
                     <Label>Add from URL</Label>
-                    <Button variant="outline" onClick={handleComposeUrlAdd} className="w-full mt-1">
-                      <Upload className="w-4 h-4 mr-2" /> Add Image URL
-                    </Button>
+                    <UrlInputDialog onUrlSubmit={handleComposeUrlAdd}>
+                      <Button variant="outline" className="w-full mt-1">
+                        <Upload className="w-4 h-4 mr-2" /> Add Image URL
+                      </Button>
+                    </UrlInputDialog>
                   </div>
                 </div>
+
+                <Separator />
 
                 <div>
                   <Label htmlFor="compose-prompt">Composition Prompt</Label>
@@ -776,8 +813,13 @@ function App() {
                   />
                 </div>
 
-                <Button 
-                  onClick={handleComposeImages} 
+                <AIParameterControls
+                  onParametersChange={setAiParameters}
+                  defaultValues={aiParameters}
+                />
+
+                <Button
+                  onClick={handleComposeImages}
                   disabled={loading || !composePrompt.trim() || selectedForCompose.size === 0}
                   className="w-full"
                 >
@@ -786,70 +828,76 @@ function App() {
               </CardContent>
             </Card>
 
+            <Separator />
+
             {/* Available Images for Composition */}
             {composeImages.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle>Select Images for Composition</CardTitle>
                   <CardDescription>
-                    {selectedForCompose.size === 0 
-                      ? "Click on images to select them for composition. You must select at least one image before composing." 
+                    {selectedForCompose.size === 0
+                      ? "Click on images to select them for composition. You must select at least one image before composing."
                       : `${selectedForCompose.size} image${selectedForCompose.size > 1 ? 's' : ''} selected`
                     }
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {composeImages.map((image) => (
-                      <Card 
-                        key={image.id} 
-                        className={`overflow-hidden cursor-pointer transition-all border-2 ${
-                          selectedForCompose.has(image.id) 
-                            ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg' 
-                            : 'border-transparent hover:border-gray-300'
-                        }`} 
-                        onClick={() => toggleComposeSelection(image.id)}
-                      >
-                        <div className="aspect-square relative">
-                          <img 
-                            src={image.src} 
-                            alt={image.name}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute top-2 left-2 bg-white rounded-full p-1 shadow-lg">
-                            <Checkbox 
-                              checked={selectedForCompose.has(image.id)}
-                              onChange={() => toggleComposeSelection(image.id)}
-                              className="w-5 h-5"
+                  <ScrollArea className="h-[500px] w-full rounded-md border p-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {composeImages.map((image) => (
+                        <Card
+                          key={image.id}
+                          className={`overflow-hidden cursor-pointer transition-all border-2 ${
+                            selectedForCompose.has(image.id)
+                              ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg'
+                              : 'border-transparent hover:border-gray-300'
+                          }`}
+                          onClick={() => toggleComposeSelection(image.id)}
+                        >
+                          <div className="aspect-square relative">
+                            <img
+                              src={image.src}
+                              alt={image.name}
+                              className="w-full h-full object-cover"
                             />
-                          </div>
-                          <div className="absolute top-2 right-2">
-                            <Button 
-                              size="sm" 
-                              variant="destructive"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                removeComposeImage(image.id)
-                              }}
-                              className="w-6 h-6 p-0 rounded-full"
-                            >
-                              ×
-                            </Button>
-                          </div>
-                          {selectedForCompose.has(image.id) && (
-                            <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                              <div className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                Selected
-                              </div>
+                            <div className="absolute top-2 left-2 bg-white rounded-full p-1 shadow-lg">
+                              <Checkbox
+                                checked={selectedForCompose.has(image.id)}
+                                onChange={() => toggleComposeSelection(image.id)}
+                                className="w-5 h-5"
+                              />
                             </div>
-                          )}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
+                            <div className="absolute top-2 right-2">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  removeComposeImage(image.id)
+                                }}
+                                className="w-6 h-6 p-0 rounded-full"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                            {selectedForCompose.has(image.id) && (
+                              <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                                <div className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                  Selected
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             )}
+
+            <Separator />
 
             {/* Composed Images Gallery */}
             {composedImages.length > 0 && (
@@ -858,55 +906,26 @@ function App() {
                   <CardTitle>Composed Images</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {composedImages.map((image) => (
-                      <Card key={image.id} className="overflow-hidden">
-                        <div className="aspect-square relative">
-                          <img 
-                            src={image.src} 
-                            alt={image.prompt}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <CardContent className="p-3">
-                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{image.prompt}</p>
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => sendToEditTab(image)}
-                              className="flex-1"
-                            >
-                              <Edit3 className="w-3 h-3 mr-1" /> Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => addToComposition(image)}
-                              className="flex-1"
-                            >
-                              <Layers className="w-3 h-3 mr-1" /> Compose
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => downloadImage(image)}
-                              className="flex-1"
-                            >
-                              <Download className="w-3 h-3 mr-1" /> Download
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {composedImages.map((image) => (
+                        <EnhancedImageCard
+                          key={image.id}
+                          image={image}
+                          onSendToEdit={sendToEditTab}
+                          onSendToCompose={addToComposition}
+                          onDownload={downloadImage}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             )}
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </ToastProvider>
   )
 }
 

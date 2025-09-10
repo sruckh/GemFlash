@@ -192,7 +192,33 @@ response = client.models.generate_content(
 - ✅ API correctly passes aspect_ratio parameter to Gemini API
 - ✅ All existing functionality preserved with improved accuracy
 
-This change ensures the application properly utilizes the Gemini API's aspect ratio system rather than attempting to use unsupported resolution parameters, resulting in more predictable and accurate image generation outcomes.
+**CRITICAL DISCOVERY - Correct Aspect Ratio Implementation:**
+
+After extensive research into the google.genai library documentation, we discovered that **Gemini 2.5 Flash Image models do NOT support aspect_ratio parameters in GenerateContentConfig**. The validation error "aspect_ratio Extra inputs are not permitted" was caused by attempting to use Imagen-style parameters with Gemini models.
+
+**Correct Implementation:**
+- **Gemini 2.5 Flash Image** (`gemini-2.5-flash-image-preview`): Aspect ratio specified via prompt text
+- **Imagen models** (`imagen-3.0-generate-002`): Aspect ratio via GenerateImagesConfig parameter
+
+**Final Solution:**
+Instead of passing `aspect_ratio` to `GenerateContentConfig`, the aspect ratio is now specified directly in the prompt text with detailed descriptions:
+
+```python
+# WRONG - causes validation error
+config=types.GenerateContentConfig(
+    response_modalities=["IMAGE"],
+    aspect_ratio=request.aspect_ratio  # ❌ Not supported
+)
+
+# CORRECT - works with Gemini 2.5 Flash Image
+aspect_description = "widescreen landscape format (2816×1536 pixels)"
+detailed_prompt = f"""Generate image in {aspect_ratio} ({aspect_description})"""
+config=types.GenerateContentConfig(
+    response_modalities=["IMAGE"]  # ✅ Correct
+)
+```
+
+This change ensures the application properly works with Gemini 2.5 Flash Image's actual API capabilities, resolving the validation error and enabling proper aspect ratio control through prompt specification.
 
 ### Loading Animations for Background Processes
 

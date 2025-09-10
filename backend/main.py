@@ -99,27 +99,131 @@ async def generate_image(request: ImageGenerationRequest):
         print(f"Generating image with prompt: {request.prompt}, aspect_ratio: {request.aspect_ratio}")
         
         try:
-            print("Calling client.models.generate_content...")
+            print("Step 1: Enhancing user prompt with Gemini 2.5 Flash...")
             
-            # Create detailed prompt for image generation
-            detailed_prompt = f"""You are an expert AI image generator. Create a high-quality, photorealistic image based on the user's request.
+            # Map aspect ratios to composition hints and descriptions
+            aspect_ratio_info = {
+                "1:1": {
+                    "composition": "square", 
+                    "description": "square format (1536×1536 pixels)",
+                    "cinematic": "centered square composition"
+                },
+                "16:9": {
+                    "composition": "widescreen", 
+                    "description": "widescreen landscape format (2816×1536 pixels)",
+                    "cinematic": "cinematic ultra-widescreen shot"
+                },
+                "9:16": {
+                    "composition": "portrait", 
+                    "description": "portrait format (1536×2816 pixels)",
+                    "cinematic": "vertical portrait orientation"
+                },
+                "4:3": {
+                    "composition": "landscape", 
+                    "description": "standard landscape format (2048×1536 pixels)",
+                    "cinematic": "classic landscape composition"
+                },
+                "3:4": {
+                    "composition": "portrait", 
+                    "description": "standard portrait format (1536×2048 pixels)",
+                    "cinematic": "vertical portrait composition"
+                }
+            }
+            
+            aspect_info = aspect_ratio_info.get(request.aspect_ratio, {
+                "composition": "square", 
+                "description": f"{request.aspect_ratio} aspect ratio",
+                "cinematic": f"{request.aspect_ratio} composition"
+            })
+            
+            # Step 1: Intelligent prompt optimization following Google's recommendations
+            word_count = len(request.prompt.split())
+            char_count = len(request.prompt)
+            
+            if word_count > 50 or char_count > 300:
+                # Complex prompt - optimize and summarize
+                print(f"🔍 Complex prompt detected ({char_count} chars, {word_count} words) - optimizing and summarizing")
+                meta_prompt = f"""Optimize this overly complex image prompt. Keep only essential visual elements, make it concise and descriptive. Limit response to 100 words maximum.
 
-User Request: "{request.prompt}"
+Original: "{request.prompt}"
 
-Generation Guidelines:
-- Create a detailed, high-quality image that matches the description
-- Ensure the image is photorealistic and well-composed
-- Pay attention to lighting, colors, and overall aesthetics
+Optimized prompt:"""
+            else:
+                # Simple prompt - enhance with details  
+                print(f"🔍 Simple prompt detected ({char_count} chars, {word_count} words) - enhancing with details")
+                meta_prompt = f"""Enhance this simple image prompt with specific visual details, lighting, and photographic elements. Keep response under 100 words.
+
+Original: "{request.prompt}"
+
+Enhanced prompt:"""
+
+            # Call Gemini 2.5 Flash for prompt enhancement
+            try:
+                print(f"🔄 Calling Gemini 2.5 Flash for enhancement...")
+                print(f"📝 Meta-prompt length: {len(meta_prompt)} characters")
+                
+                enhancement_response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents={"parts": [{"text": meta_prompt}]},
+                    config=types.GenerateContentConfig(
+                        response_modalities=["TEXT"],
+                        max_output_tokens=512,  # Sufficient for 100-word responses
+                        temperature=0.7
+                    )
+                )
+                
+                print(f"📦 Enhancement response type: {type(enhancement_response)}")
+                print(f"📦 Has candidates: {hasattr(enhancement_response, 'candidates') and bool(enhancement_response.candidates)}")
+                
+                if hasattr(enhancement_response, 'candidates') and enhancement_response.candidates:
+                    print(f"📦 First candidate: {enhancement_response.candidates[0]}")
+                    if hasattr(enhancement_response.candidates[0], 'content') and enhancement_response.candidates[0].content:
+                        print(f"📦 Content: {enhancement_response.candidates[0].content}")
+                        if hasattr(enhancement_response.candidates[0].content, 'parts') and enhancement_response.candidates[0].content.parts:
+                            print(f"📦 Parts count: {len(enhancement_response.candidates[0].content.parts)}")
+                            if enhancement_response.candidates[0].content.parts[0].text:
+                                enhanced_prompt = enhancement_response.candidates[0].content.parts[0].text.strip()
+                                print(f"✅ Enhanced Prompt: {enhanced_prompt}")
+                            else:
+                                enhanced_prompt = request.prompt
+                                print(f"⚠️ Enhancement failed - no text in first part, using original prompt: {enhanced_prompt}")
+                        else:
+                            enhanced_prompt = request.prompt
+                            print(f"⚠️ Enhancement failed - no parts in content, using original prompt: {enhanced_prompt}")
+                    else:
+                        enhanced_prompt = request.prompt
+                        print(f"⚠️ Enhancement failed - no content in candidate, using original prompt: {enhanced_prompt}")
+                else:
+                    enhanced_prompt = request.prompt
+                    print(f"⚠️ Enhancement failed - no candidates in response, using original prompt: {enhanced_prompt}")
+                    
+            except Exception as enhancement_error:
+                enhanced_prompt = request.prompt
+                print(f"❌ Enhancement error: {str(enhancement_error)}")
+                print(f"⚠️ Using original prompt due to error: {enhanced_prompt}")
+                import traceback
+                traceback.print_exc()
+            
+            print("Step 2: Generating image with enhanced prompt...")
+            
+            # Step 2: Generate image with enhanced prompt
+            final_prompt = f"""{enhanced_prompt}
+
+Technical Specifications:
+- Generate in {aspect_info['description']} 
+- Use {aspect_info['cinematic']} framing
+- Photorealistic, highly detailed, professional quality
+- 8K resolution, sharp focus, perfect lighting
 
 Output: Return ONLY the final generated image. Do not return text."""
 
             # Use the working pixshop format: contents with parts array
+            # Remove aspect_ratio from config as it's not supported by GenerateContentConfig
             response = client.models.generate_content(
                 model="gemini-2.5-flash-image-preview",
-                contents={"parts": [{"text": detailed_prompt}]},
+                contents={"parts": [{"text": final_prompt}]},
                 config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"],
-                    aspect_ratio=request.aspect_ratio
+                    response_modalities=["IMAGE"]
                 )
             )
             print(f"client.models.generate_content completed successfully")
@@ -236,15 +340,31 @@ async def edit_image(
             })
             print(f"Successfully added uploaded image: {image_file.filename}")
         
-        # Create detailed prompt like pixshop does
+        # Create detailed prompt with aspect ratio specification
+        # Map aspect ratios to expected pixel dimensions for user clarity
+        aspect_ratio_descriptions = {
+            "1:1": "square format (1536×1536 pixels)",
+            "16:9": "widescreen landscape format (2816×1536 pixels)",
+            "9:16": "portrait format (1536×2816 pixels)", 
+            "4:3": "standard landscape format (2048×1536 pixels)",
+            "3:4": "standard portrait format (1536×2048 pixels)"
+        }
+        
+        aspect_description = aspect_ratio_descriptions.get(aspect_ratio, f"{aspect_ratio} aspect ratio")
+        
         detailed_prompt = f"""You are an expert photo editor AI. Your task is to perform a natural edit on the provided image based on the user's request.
 
 User Request: "{prompt}"
+
+Image Specifications:
+- Aspect ratio: {aspect_ratio} ({aspect_description})
+- Create the edited image in exactly {aspect_description}
 
 Editing Guidelines:
 - Apply the requested edit to the image while maintaining photorealism
 - Keep the overall composition and style consistent
 - Make the edit blend seamlessly with the rest of the image
+- Generate the edited image in the specified {aspect_description}
 
 Output: Return ONLY the final edited image. Do not return text."""
 
@@ -254,12 +374,12 @@ Output: Return ONLY the final edited image. Do not return text."""
         print(f"Sending {len(parts)} parts to API: {len([p for p in parts if 'inlineData' in p])} image(s) + 1 text prompt")
         
         # Use the working pixshop format: contents with parts array
+        # Remove aspect_ratio from config as it's not supported by GenerateContentConfig
         response = client.models.generate_content(
             model="gemini-2.5-flash-image-preview",
             contents={"parts": parts},
             config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"],
-                aspect_ratio=aspect_ratio
+                response_modalities=["IMAGE", "TEXT"]
             )
         )
         
