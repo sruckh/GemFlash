@@ -192,7 +192,7 @@ Enhanced prompt:"""
                     contents={"parts": [{"text": meta_prompt}]},
                     config=types.GenerateContentConfig(
                         response_modalities=["TEXT"],
-                        max_output_tokens=512,  # Sufficient for 100-word responses
+                        max_output_tokens=256,  # Reduced to prevent MAX_TOKENS errors
                         temperature=0.7
                     )
                 )
@@ -201,26 +201,55 @@ Enhanced prompt:"""
                 print(f"📦 Has candidates: {hasattr(enhancement_response, 'candidates') and bool(enhancement_response.candidates)}")
                 
                 if hasattr(enhancement_response, 'candidates') and enhancement_response.candidates:
-                    print(f"📦 First candidate: {enhancement_response.candidates[0]}")
-                    if hasattr(enhancement_response.candidates[0], 'content') and enhancement_response.candidates[0].content:
-                        print(f"📦 Content: {enhancement_response.candidates[0].content}")
-                        if hasattr(enhancement_response.candidates[0].content, 'parts') and enhancement_response.candidates[0].content.parts:
-                            print(f"📦 Parts count: {len(enhancement_response.candidates[0].content.parts)}")
-                            if enhancement_response.candidates[0].content.parts[0].text:
-                                enhanced_prompt = enhancement_response.candidates[0].content.parts[0].text.strip()
-                                print(f"✅ Enhanced Prompt: {enhanced_prompt}")
+                    first_candidate = enhancement_response.candidates[0]
+                    print(f"📦 First candidate: {first_candidate}")
+
+                    # Check for MAX_TOKENS finish reason
+                    if hasattr(first_candidate, 'finish_reason') and first_candidate.finish_reason:
+                        print(f"📦 Finish reason: {first_candidate.finish_reason}")
+                        if str(first_candidate.finish_reason) == 'MAX_TOKENS':
+                            enhanced_prompt = request.prompt
+                            print(f"⚠️ Enhancement hit MAX_TOKENS limit, using original prompt")
+                            # Continue to image generation with original prompt
+                        else:
+                            # Process the response normally
+                            if hasattr(first_candidate, 'content') and first_candidate.content:
+                                print(f"📦 Content: {first_candidate.content}")
+                                if hasattr(first_candidate.content, 'parts') and first_candidate.content.parts:
+                                    print(f"📦 Parts count: {len(first_candidate.content.parts)}")
+                                    if first_candidate.content.parts[0].text:
+                                        enhanced_prompt = first_candidate.content.parts[0].text.strip()
+                                        print(f"✅ Enhanced Prompt: {enhanced_prompt}")
+                                    else:
+                                        enhanced_prompt = request.prompt
+                                        print(f"⚠️ Enhancement failed - no text in first part, using original prompt")
+                                else:
+                                    enhanced_prompt = request.prompt
+                                    print(f"⚠️ Enhancement failed - no parts in content, using original prompt")
                             else:
                                 enhanced_prompt = request.prompt
-                                print(f"⚠️ Enhancement failed - no text in first part, using original prompt: {enhanced_prompt}")
+                                print(f"⚠️ Enhancement failed - no content in candidate, using original prompt")
+                    else:
+                        # No finish_reason, try to get content
+                        if hasattr(first_candidate, 'content') and first_candidate.content:
+                            print(f"📦 Content: {first_candidate.content}")
+                            if hasattr(first_candidate.content, 'parts') and first_candidate.content.parts:
+                                print(f"📦 Parts count: {len(first_candidate.content.parts)}")
+                                if first_candidate.content.parts[0].text:
+                                    enhanced_prompt = first_candidate.content.parts[0].text.strip()
+                                    print(f"✅ Enhanced Prompt: {enhanced_prompt}")
+                                else:
+                                    enhanced_prompt = request.prompt
+                                    print(f"⚠️ Enhancement failed - no text in first part, using original prompt")
+                            else:
+                                enhanced_prompt = request.prompt
+                                print(f"⚠️ Enhancement failed - no parts in content, using original prompt")
                         else:
                             enhanced_prompt = request.prompt
-                            print(f"⚠️ Enhancement failed - no parts in content, using original prompt: {enhanced_prompt}")
-                    else:
-                        enhanced_prompt = request.prompt
-                        print(f"⚠️ Enhancement failed - no content in candidate, using original prompt: {enhanced_prompt}")
+                            print(f"⚠️ Enhancement failed - no content in candidate, using original prompt")
                 else:
                     enhanced_prompt = request.prompt
-                    print(f"⚠️ Enhancement failed - no candidates in response, using original prompt: {enhanced_prompt}")
+                    print(f"⚠️ Enhancement failed - no candidates in response, using original prompt")
                     
             except Exception as enhancement_error:
                 enhanced_prompt = request.prompt
