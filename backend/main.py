@@ -104,29 +104,54 @@ async def generate_image(request: ImageGenerationRequest):
             # Map aspect ratios to composition hints and descriptions
             aspect_ratio_info = {
                 "1:1": {
-                    "composition": "square", 
-                    "description": "square format (1536×1536 pixels)",
+                    "composition": "square",
+                    "description": "square format (1024×1024 pixels)",
                     "cinematic": "centered square composition"
                 },
-                "16:9": {
-                    "composition": "widescreen", 
-                    "description": "widescreen landscape format (2816×1536 pixels)",
-                    "cinematic": "cinematic ultra-widescreen shot"
+                "2:3": {
+                    "composition": "portrait",
+                    "description": "portrait format (832×1248 pixels)",
+                    "cinematic": "vertical portrait composition"
                 },
-                "9:16": {
-                    "composition": "portrait", 
-                    "description": "portrait format (1536×2816 pixels)",
-                    "cinematic": "vertical portrait orientation"
-                },
-                "4:3": {
-                    "composition": "landscape", 
-                    "description": "standard landscape format (2048×1536 pixels)",
-                    "cinematic": "classic landscape composition"
+                "3:2": {
+                    "composition": "landscape",
+                    "description": "landscape format (1248×832 pixels)",
+                    "cinematic": "horizontal landscape composition"
                 },
                 "3:4": {
-                    "composition": "portrait", 
-                    "description": "standard portrait format (1536×2048 pixels)",
+                    "composition": "portrait",
+                    "description": "portrait format (864×1184 pixels)",
                     "cinematic": "vertical portrait composition"
+                },
+                "4:3": {
+                    "composition": "landscape",
+                    "description": "landscape format (1184×864 pixels)",
+                    "cinematic": "classic landscape composition"
+                },
+                "4:5": {
+                    "composition": "portrait",
+                    "description": "portrait format (896×1152 pixels)",
+                    "cinematic": "vertical portrait composition"
+                },
+                "5:4": {
+                    "composition": "landscape",
+                    "description": "landscape format (1152×896 pixels)",
+                    "cinematic": "horizontal landscape composition"
+                },
+                "9:16": {
+                    "composition": "portrait",
+                    "description": "portrait format (768×1344 pixels)",
+                    "cinematic": "vertical portrait orientation"
+                },
+                "16:9": {
+                    "composition": "widescreen",
+                    "description": "widescreen landscape format (1344×768 pixels)",
+                    "cinematic": "cinematic widescreen shot"
+                },
+                "21:9": {
+                    "composition": "ultrawide",
+                    "description": "ultra-wide format (1536×672 pixels)",
+                    "cinematic": "cinematic ultra-wide shot"
                 }
             }
             
@@ -205,12 +230,14 @@ Enhanced prompt:"""
                 traceback.print_exc()
             
             print("Step 2: Generating image with enhanced prompt...")
-            
+
             # Step 2: Generate image with enhanced prompt
+            # Gemini 2.5 Flash Image requires "aspect ratio is" followed by the ratio value
             final_prompt = f"""{enhanced_prompt}
 
+aspect ratio is {request.aspect_ratio}
+
 Technical Specifications:
-- Generate in {aspect_info['description']} 
 - Use {aspect_info['cinematic']} framing
 - Photorealistic, highly detailed, professional quality
 - 8K resolution, sharp focus, perfect lighting
@@ -220,7 +247,7 @@ Output: Return ONLY the final generated image. Do not return text."""
             # Use the working pixshop format: contents with parts array
             # Remove aspect_ratio from config as it's not supported by GenerateContentConfig
             response = client.models.generate_content(
-                model="gemini-2.5-flash-image-preview",
+                model="gemini-2.5-flash-image",
                 contents={"parts": [{"text": final_prompt}]},
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE"]
@@ -343,28 +370,31 @@ async def edit_image(
         # Create detailed prompt with aspect ratio specification
         # Map aspect ratios to expected pixel dimensions for user clarity
         aspect_ratio_descriptions = {
-            "1:1": "square format (1536×1536 pixels)",
-            "16:9": "widescreen landscape format (2816×1536 pixels)",
-            "9:16": "portrait format (1536×2816 pixels)", 
-            "4:3": "standard landscape format (2048×1536 pixels)",
-            "3:4": "standard portrait format (1536×2048 pixels)"
+            "1:1": "square format (1024×1024 pixels)",
+            "2:3": "portrait format (832×1248 pixels)",
+            "3:2": "landscape format (1248×832 pixels)",
+            "3:4": "portrait format (864×1184 pixels)",
+            "4:3": "landscape format (1184×864 pixels)",
+            "4:5": "portrait format (896×1152 pixels)",
+            "5:4": "landscape format (1152×896 pixels)",
+            "9:16": "portrait format (768×1344 pixels)",
+            "16:9": "widescreen landscape format (1344×768 pixels)",
+            "21:9": "ultra-wide format (1536×672 pixels)"
         }
-        
+
         aspect_description = aspect_ratio_descriptions.get(aspect_ratio, f"{aspect_ratio} aspect ratio")
         
         detailed_prompt = f"""You are an expert photo editor AI. Your task is to perform a natural edit on the provided image based on the user's request.
 
 User Request: "{prompt}"
 
-Image Specifications:
-- Aspect ratio: {aspect_ratio} ({aspect_description})
-- Create the edited image in exactly {aspect_description}
+aspect ratio is {aspect_ratio}
 
 Editing Guidelines:
 - Apply the requested edit to the image while maintaining photorealism
 - Keep the overall composition and style consistent
 - Make the edit blend seamlessly with the rest of the image
-- Generate the edited image in the specified {aspect_description}
+- Generate the edited image in the specified aspect ratio
 
 Output: Return ONLY the final edited image. Do not return text."""
 
@@ -376,7 +406,7 @@ Output: Return ONLY the final edited image. Do not return text."""
         # Use the working pixshop format: contents with parts array
         # Remove aspect_ratio from config as it's not supported by GenerateContentConfig
         response = client.models.generate_content(
-            model="gemini-2.5-flash-image-preview",
+            model="gemini-2.5-flash-image",
             contents={"parts": parts},
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"]
@@ -458,7 +488,7 @@ Output: Return ONLY the final composed image. Do not return text."""
         
         # Use the working pixshop format: contents with parts array
         response = client.models.generate_content(
-            model="gemini-2.5-flash-image-preview",
+            model="gemini-2.5-flash-image",
             contents={"parts": parts},
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"]

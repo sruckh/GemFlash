@@ -16,6 +16,7 @@ import { UrlInputDialog } from "./components/UrlInputDialog";
 import { ToastProvider, toast } from "./components/ToastProvider";
 import { EnhancedImageCard } from "./components/EnhancedImageCard";
 import { ProcessingProgress } from "./components/ProcessingProgress";
+import { EnhancedImageUpload } from "./components/EnhancedImageUpload";
 
 function App() {
   // Tab state
@@ -54,11 +55,16 @@ function App() {
   const composeFileRef = useRef(null)
 
   const aspectRatios = [
-    { value: "1:1", label: "1:1 Square (1536×1536px) - Social Media Profile" },
-    { value: "16:9", label: "16:9 Widescreen (2816×1536px) - Desktop/Video" },
-    { value: "9:16", label: "9:16 Portrait (1536×2816px) - Mobile/Stories" },
-    { value: "4:3", label: "4:3 Standard (2048×1536px) - Photo Landscape" },
-    { value: "3:4", label: "3:4 Portrait (1536×2048px) - Social Posts" },
+    { value: "1:1", label: "1:1 Square (1024×1024px) - Social Media Profile" },
+    { value: "2:3", label: "2:3 Portrait (832×1248px) - Print/Poster" },
+    { value: "3:2", label: "3:2 Landscape (1248×832px) - Photography" },
+    { value: "3:4", label: "3:4 Portrait (864×1184px) - Social Posts" },
+    { value: "4:3", label: "4:3 Standard (1184×864px) - Photo Landscape" },
+    { value: "4:5", label: "4:5 Portrait (896×1152px) - Instagram" },
+    { value: "5:4", label: "5:4 Landscape (1152×896px) - Classic Photo" },
+    { value: "9:16", label: "9:16 Portrait (768×1344px) - Mobile/Stories" },
+    { value: "16:9", label: "16:9 Widescreen (1344×768px) - Desktop/Video" },
+    { value: "21:9", label: "21:9 Ultra-wide (1536×672px) - Cinematic" },
   ]
 
   // Generate image handler
@@ -305,12 +311,15 @@ function App() {
   // Send image to edit tab
   const sendToEdit = (image) => {
     setActiveTab("edit")
-    // Add image to edit model cards and select it
+    // Add image to edit model cards and select it with full metadata
     const editImage = {
       id: Date.now(),
       src: image.src,
-      prompt: image.prompt,
-      type: 'model'
+      prompt: image.prompt || '',
+      type: 'transferred',
+      timestamp: image.timestamp || new Date(),
+      aspect_ratio: image.aspect_ratio || null,
+      name: image.name || 'transferred-image'
     }
     setEditModelImages(prev => [editImage, ...prev])
     setSelectedImageForEdit(editImage)
@@ -334,7 +343,11 @@ function App() {
           id: Date.now(),
           src: image.src,
           file: file,
-          name: `image-${Date.now()}.png`
+          name: image.name || `image-${Date.now()}.png`,
+          prompt: image.prompt || '',
+          type: image.type || 'transferred',
+          timestamp: image.timestamp || new Date(),
+          aspect_ratio: image.aspect_ratio || null
         }
         setComposeImages(prev => [newComposeImage, ...prev])
       })
@@ -356,18 +369,21 @@ function App() {
       // Convert base64 to blob
       const response = await fetch(image.src)
       const blob = await response.blob()
-      
+
       // Create a File object from the blob
       const file = new File([blob], `composed-image-${image.id}.png`, { type: 'image/png' })
-      
-      // Add to edit model images and select it
+
+      // Add to edit model images and select it with full metadata
       const newModelImage = {
         id: Date.now() + Math.random(),
         src: image.src,
-        prompt: image.prompt || 'Composed image',
-        type: 'transferred'
+        prompt: image.prompt || '',
+        type: 'transferred',
+        timestamp: image.timestamp || new Date(),
+        aspect_ratio: image.aspect_ratio || null,
+        name: image.name || `composed-image-${image.id}.png`
       }
-      
+
       // Set the edit file and add to model images
       setEditImage(file)
       setEditImageUrl("") // Clear URL field when transferring composed images
@@ -385,21 +401,26 @@ function App() {
       // Convert base64 to blob
       const response = await fetch(image.src)
       const blob = await response.blob()
-      
+
       // Create a File object from the blob
       const file = new File([blob], `composed-image-${image.id}.png`, { type: 'image/png' })
-      
-      // Create image object for composition
+
+      // Create image object for composition with full metadata
       const newImage = {
         id: Date.now() + Math.random(),
         src: image.src,
         file: file,
-        name: `composed-image-${image.id}.png`
+        name: image.name || `composed-image-${image.id}.png`,
+        prompt: image.prompt || '',
+        type: image.type || 'transferred',
+        timestamp: image.timestamp || new Date(),
+        aspect_ratio: image.aspect_ratio || null
       }
-      
+
       // Add to composition images and switch to compose tab
       setComposeImages(prev => [...prev, newImage])
       setActiveTab('compose')
+      toast.success("Image added to composition pool")
     } catch (error) {
       console.error('Error adding image to composition:', error)
     }
@@ -415,7 +436,9 @@ function App() {
           id: Date.now() + Math.random(),
           src: e.target.result,
           file: file,
-          name: file.name
+          name: file.name,
+          type: 'uploaded',
+          timestamp: new Date()
         }
         setComposeImages(prev => [newImage, ...prev])
       }
@@ -429,7 +452,9 @@ function App() {
       const newImage = {
         id: Date.now(),
         src: url.trim(),
-        name: `image-${Date.now()}`
+        name: `image-${Date.now()}`,
+        type: 'url',
+        timestamp: new Date()
       }
       setComposeImages(prev => [newImage, ...prev])
       toast.success("Image added from URL")
@@ -443,6 +468,11 @@ function App() {
       if (newSet.has(imageId)) {
         newSet.delete(imageId)
       } else {
+        // Enforce 5-image limit
+        if (newSet.size >= 5) {
+          toast.error("Maximum 5 images can be selected for composition")
+          return prev
+        }
         newSet.add(imageId)
       }
       return newSet
@@ -593,6 +623,10 @@ function App() {
                           onSendToEdit={sendToEdit}
                           onSendToCompose={sendToCompose}
                           onDownload={downloadImage}
+                          onDelete={() => {
+                            setGeneratedImages(prev => prev.filter(img => img.id !== image.id))
+                            toast.success("Image removed from gallery")
+                          }}
                         />
                       ))}
                     </div>
@@ -633,46 +667,43 @@ function App() {
                   </Card>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Upload from Computer</Label>
-                    <Input
-                      ref={editFileRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files[0]
-                        if (file) {
-                          setEditImage(file)
-                          // Add to model cards
-                          const reader = new FileReader()
-                          reader.onload = (e) => {
-                            const newImage = {
-                              id: Date.now(),
-                              src: e.target.result,
-                              prompt: file.name,
-                              type: 'uploaded',
-                              timestamp: new Date()
-                            }
-                            setEditModelImages(prev => [newImage, ...prev])
-                            setSelectedImageForEdit(newImage)
-                          }
-                          reader.readAsDataURL(file)
+                {/* Enhanced Upload Component */}
+                <EnhancedImageUpload
+                  onImagesAdded={(images) => {
+                    images.forEach(image => {
+                      if (image.file) {
+                        // File upload
+                        const newImage = {
+                          id: image.id,
+                          src: image.src,
+                          file: image.file,
+                          name: image.name,
+                          type: 'uploaded',
+                          timestamp: new Date()
                         }
-                      }}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-url">Or Enter Image URL</Label>
-                    <Input
-                      id="edit-url"
-                      placeholder="https://example.com/image.jpg"
-                      value={editImageUrl}
-                      onChange={(e) => setEditImageUrl(e.target.value)}
-                    />
-                  </div>
-                </div>
+                        setEditModelImages(prev => [newImage, ...prev])
+                        setSelectedImageForEdit(newImage)
+                        setEditImage(image.file)
+                      } else {
+                        // URL upload
+                        const newImage = {
+                          id: image.id,
+                          src: image.src,
+                          name: image.name,
+                          type: 'url',
+                          timestamp: new Date()
+                        }
+                        setEditModelImages(prev => [newImage, ...prev])
+                        setSelectedImageForEdit(newImage)
+                        setEditImageUrl(image.src)
+                      }
+                    })
+                  }}
+                  maxFiles={5}
+                  title="Upload/Edit Image"
+                  subtitle="Drag & drop images here or click to browse"
+                  className="mb-4"
+                />
 
                 <Separator />
 
@@ -708,20 +739,30 @@ function App() {
                   <CardDescription>Select an image to edit</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                  <div className="p-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {editModelImages.map((image) => (
                         <EnhancedImageCard
                           key={image.id}
                           image={image}
-                          onSendToEdit={selectImageForEdit}
+                          onSendToCompose={sendToCompose}
                           onDownload={downloadImage}
-                          onRemove={removeImageFromEditModel}
-                          showRemove={true}
+                          onDelete={(imageId) => {
+                            setEditModelImages(prev => prev.filter(img => img.id !== imageId))
+                            if (selectedImageForEdit?.id === imageId) {
+                              setSelectedImageForEdit(null)
+                              setEditImage(null)
+                            }
+                            toast.success("Model image removed")
+                          }}
+                          onSelect={selectImageForEdit}
+                          isSelectable={true}
+                          isSelected={selectedImageForEdit?.id === image.id}
+                          hideEditIcon={true}
                         />
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -733,9 +774,10 @@ function App() {
               <Card>
                 <CardHeader>
                   <CardTitle>Edited Images</CardTitle>
+                  <CardDescription>Select an edited image to edit further</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                  <div className="p-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {editedImages.map((image) => (
                         <EnhancedImageCard
@@ -743,10 +785,22 @@ function App() {
                           image={image}
                           onSendToCompose={sendToCompose}
                           onDownload={downloadImage}
+                          onDelete={(imageId) => {
+                            setEditedImages(prev => prev.filter(img => img.id !== imageId))
+                            if (selectedImageForEdit?.id === imageId) {
+                              setSelectedImageForEdit(null)
+                              setEditImage(null)
+                            }
+                            toast.success("Edited image removed")
+                          }}
+                          onSelect={selectImageForEdit}
+                          isSelectable={true}
+                          isSelected={selectedImageForEdit?.id === image.id}
+                          hideEditIcon={true}
                         />
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -760,27 +814,35 @@ function App() {
                 <CardDescription>Combine multiple images into one composition</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Upload Images</Label>
-                    <Input
-                      ref={composeFileRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleComposeFileUpload}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label>Add from URL</Label>
-                    <UrlInputDialog onUrlSubmit={handleComposeUrlAdd}>
-                      <Button variant="outline" className="w-full mt-1">
-                        <Upload className="w-4 h-4 mr-2" /> Add Image URL
-                      </Button>
-                    </UrlInputDialog>
-                  </div>
-                </div>
+                {/* Enhanced Upload Component */}
+                <EnhancedImageUpload
+                  onImagesAdded={(images) => {
+                    images.forEach(image => {
+                      if (image.file) {
+                        // File upload
+                        const newImage = {
+                          id: image.id,
+                          src: image.src,
+                          file: image.file,
+                          name: image.name
+                        }
+                        setComposeImages(prev => [newImage, ...prev])
+                      } else {
+                        // URL upload
+                        const newImage = {
+                          id: image.id,
+                          src: image.src,
+                          name: image.name
+                        }
+                        setComposeImages(prev => [newImage, ...prev])
+                      }
+                    })
+                  }}
+                  maxFiles={10}
+                  title="Upload Composition Images"
+                  subtitle="Add multiple images to compose"
+                  className="mb-4"
+                />
 
                 <Separator />
 
@@ -801,7 +863,7 @@ function App() {
                   disabled={loading || !composePrompt.trim() || selectedForCompose.size === 0}
                   className="w-full"
                 >
-                  {loading ? "Composing..." : `Compose Selected Images (${selectedForCompose.size})`}
+                  {loading ? "Composing..." : `Compose Selected Images (${selectedForCompose.size}/5)`}
                 </Button>
               </CardContent>
             </Card>
@@ -815,62 +877,25 @@ function App() {
                   <CardTitle>Select Images for Composition</CardTitle>
                   <CardDescription>
                     {selectedForCompose.size === 0
-                      ? "Click on images to select them for composition. You must select at least one image before composing."
-                      : `${selectedForCompose.size} image${selectedForCompose.size > 1 ? 's' : ''} selected`
+                      ? "Click on images to select them for composition. You must select at least one image before composing (maximum 5 images)."
+                      : `${selectedForCompose.size}/5 image${selectedForCompose.size > 1 ? 's' : ''} selected`
                     }
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[500px] w-full rounded-md border p-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {composeImages.map((image) => (
-                        <Card
-                          key={image.id}
-                          className={`overflow-hidden cursor-pointer transition-all border-2 ${
-                            selectedForCompose.has(image.id)
-                              ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg'
-                              : 'border-transparent hover:border-gray-300'
-                          }`}
-                          onClick={() => toggleComposeSelection(image.id)}
-                        >
-                          <div className="aspect-square relative">
-                            <img
-                              src={image.src}
-                              alt={image.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute top-2 left-2 bg-white rounded-full p-1 shadow-lg">
-                              <Checkbox
-                                checked={selectedForCompose.has(image.id)}
-                                onChange={() => toggleComposeSelection(image.id)}
-                                className="w-5 h-5"
-                              />
-                            </div>
-                            <div className="absolute top-2 right-2">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  removeComposeImage(image.id)
-                                }}
-                                className="w-6 h-6 p-0 rounded-full"
-                              >
-                                ×
-                              </Button>
-                            </div>
-                            {selectedForCompose.has(image.id) && (
-                              <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                                <div className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                  Selected
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {composeImages.map((image) => (
+                      <EnhancedImageCard
+                        key={image.id}
+                        image={image}
+                        onSelect={() => toggleComposeSelection(image.id)}
+                        isSelectable={true}
+                        isSelected={selectedForCompose.has(image.id)}
+                        hideEditIcon={true}
+                        onDelete={() => removeComposeImage(image.id)}
+                      />
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -882,10 +907,11 @@ function App() {
               <Card>
                 <CardHeader>
                   <CardTitle>Composed Images</CardTitle>
+                  <CardDescription>Select composed images to use in new compositions</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {composedImages.map((image) => (
                         <EnhancedImageCard
                           key={image.id}
@@ -893,10 +919,22 @@ function App() {
                           onSendToEdit={sendToEditTab}
                           onSendToCompose={addToComposition}
                           onDownload={downloadImage}
+                          onSelect={() => toggleComposeSelection(image.id)}
+                          isSelectable={true}
+                          isSelected={selectedForCompose.has(image.id)}
+                          onDelete={(imageId) => {
+                            setComposedImages(prev => prev.filter(img => img.id !== imageId))
+                            setSelectedForCompose(prev => {
+                              const newSet = new Set(prev)
+                              newSet.delete(imageId)
+                              return newSet
+                            })
+                            toast.success("Composed image removed")
+                          }}
                         />
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </CardContent>
               </Card>
             )}
