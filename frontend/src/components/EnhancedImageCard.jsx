@@ -59,7 +59,7 @@ export function EnhancedImageCard({
               <img
                 src={image.src}
                 alt={image.prompt || 'Image'}
-                className="w-full h-auto object-contain max-h-96"
+                className="w-full h-auto object-contain max-h-48"
                 onError={() => setImageError(true)}
               />
 
@@ -166,31 +166,31 @@ export function EnhancedImageCard({
           )}
         </div>
 
-      <CardContent className="p-3">
-        <div className="space-y-3">
+      <CardContent className="p-2">
+        <div className="space-y-1.5">
           {/* Description */}
           <div>
-            <p className="text-sm text-gray-600 line-clamp-3">
+            <p className="text-xs text-gray-600 line-clamp-2">
               {image.prompt || 'No description available'}
             </p>
           </div>
 
           {/* Metadata */}
-          <div className="space-y-1 text-xs text-gray-500">
+          <div className="space-y-0.5 text-xs text-gray-500">
             <div className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              <span>{formatDate(image.timestamp)}</span>
+              <span className="text-xs">{formatDate(image.timestamp)}</span>
             </div>
             {image.name && (
               <div className="flex items-center gap-1">
                 <User className="w-3 h-3" />
-                <span className="truncate">{image.name}</span>
+                <span className="truncate text-xs">{image.name}</span>
               </div>
             )}
             {image.aspect_ratio && (
               <div className="flex items-center gap-1">
                 <Info className="w-3 h-3" />
-                <span>{image.aspect_ratio}</span>
+                <span className="text-xs">{image.aspect_ratio}</span>
               </div>
             )}
           </div>

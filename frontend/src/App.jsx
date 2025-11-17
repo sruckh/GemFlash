@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useDropzone } from 'react-dropzone'
 import { Button } from "./components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
 import { Textarea } from "./components/ui/textarea"
@@ -53,6 +54,38 @@ function App() {
   // File input refs
   const editFileRef = useRef(null)
   const composeFileRef = useRef(null)
+
+  // Dropzone for edit tab
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: {
+      'image/jpeg': [],
+      'image/png': [],
+      'image/webp': [],
+      'image/gif': []
+    },
+    maxSize: 10 * 1024 * 1024, // 10MB
+    maxFiles: 5,
+    multiple: true,
+    onDrop: (acceptedFiles) => {
+      acceptedFiles.forEach(file => {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const newImage = {
+            id: Date.now() + Math.random(),
+            src: event.target.result,
+            file: file,
+            name: file.name,
+            type: 'uploaded',
+            timestamp: new Date()
+          }
+          setEditModelImages(prev => [newImage, ...prev])
+          setSelectedImageForEdit(newImage)
+          setEditImage(file)
+        }
+        reader.readAsDataURL(file)
+      })
+    }
+  })
 
   const aspectRatios = [
     { value: "1:1", label: "1:1 Square (1024×1024px) - Social Media Profile" },
@@ -652,7 +685,7 @@ function App() {
                 </CardHeader>
                 <CardContent>
                   <div className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                       {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').map((image) => (
                         <EnhancedImageCard
                           key={image.id}
@@ -690,7 +723,7 @@ function App() {
                 </CardHeader>
                 <CardContent>
                   <div className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                       {editedImages.map((image) => (
                         <EnhancedImageCard
                           key={image.id}
@@ -727,66 +760,116 @@ function App() {
                 <CardDescription>Upload or select an image above, then describe your edits</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Show selected image preview */}
-                {selectedImageForEdit && (
-                  <Card className="border-primary/20 bg-primary/5">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={selectedImageForEdit.src}
-                          alt="Selected"
-                          className="w-16 h-16 object-cover rounded-lg border"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground">
-                            Selected Image
+                {/* Two-column layout: Selected Image (left) and Upload Zone (right) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Left: Selected Image Preview */}
+                  <div className="flex flex-col">
+                    <Label className="mb-2">Selected Image</Label>
+                    {selectedImageForEdit ? (
+                      <Card className="border-primary/20 bg-primary/5 flex-1">
+                        <CardContent className="p-4 h-full flex items-center justify-center">
+                          <div className="text-center">
+                            <img
+                              src={selectedImageForEdit.src}
+                              alt="Selected"
+                              className="max-w-full max-h-64 object-contain rounded-lg border mx-auto"
+                            />
+                            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                              {selectedImageForEdit.prompt || 'Ready for editing'}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Card className="border-dashed border-2 flex-1">
+                        <CardContent className="p-4 h-full flex items-center justify-center min-h-[280px]">
+                          <p className="text-sm text-muted-foreground text-center">
+                            No image selected<br />
+                            Select an image above or upload one
                           </p>
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {selectedImageForEdit.prompt || 'Ready for editing'}
-                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* Right: Compact Upload Zone */}
+                  <div className="flex flex-col">
+                    <Label className="mb-2">Upload New Image</Label>
+                    <div className="flex-1 min-h-[280px]">
+                      <div
+                        {...getRootProps()}
+                        className={`h-full border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200 flex flex-col items-center justify-center p-4 ${
+                          isDragActive
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                        }`}
+                      >
+                        <input {...getInputProps()} />
+                        <Upload className="w-12 h-12 text-blue-500 mb-3" />
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 text-center">
+                          Drop image here
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 text-center mb-2">
+                          or click to browse
+                        </p>
+                        <div className="text-xs text-gray-500 text-center space-y-0.5">
+                          <p>Max 5 files</p>
+                          <p>JPG, PNG, WEBP, GIF</p>
+                          <p>Max 10MB each</p>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
+                    </div>
+                  </div>
+                </div>
 
-                {/* Enhanced Upload Component */}
-                <EnhancedImageUpload
-                  onImagesAdded={(images) => {
-                    images.forEach(image => {
-                      if (image.file) {
-                        // File upload
-                        const newImage = {
-                          id: image.id,
-                          src: image.src,
-                          file: image.file,
-                          name: image.name,
-                          type: 'uploaded',
-                          timestamp: new Date()
+                {/* URL Input - Compact */}
+                <div>
+                  <Label htmlFor="image-url" className="text-sm">Or add image from URL</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="image-url"
+                      type="url"
+                      placeholder="https://example.com/image.jpg"
+                      value={editImageUrl}
+                      onChange={(e) => setEditImageUrl(e.target.value)}
+                      className="flex-1"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && editImageUrl.trim()) {
+                          const newImage = {
+                            id: Date.now(),
+                            src: editImageUrl,
+                            name: 'URL Image',
+                            type: 'url',
+                            timestamp: new Date()
+                          }
+                          setEditModelImages(prev => [newImage, ...prev])
+                          setSelectedImageForEdit(newImage)
+                          setEditImageUrl('')
                         }
-                        setEditModelImages(prev => [newImage, ...prev])
-                        setSelectedImageForEdit(newImage)
-                        setEditImage(image.file)
-                      } else {
-                        // URL upload
-                        const newImage = {
-                          id: image.id,
-                          src: image.src,
-                          name: image.name,
-                          type: 'url',
-                          timestamp: new Date()
+                      }}
+                    />
+                    <Button
+                      onClick={() => {
+                        if (editImageUrl.trim()) {
+                          const newImage = {
+                            id: Date.now(),
+                            src: editImageUrl,
+                            name: 'URL Image',
+                            type: 'url',
+                            timestamp: new Date()
+                          }
+                          setEditModelImages(prev => [newImage, ...prev])
+                          setSelectedImageForEdit(newImage)
+                          setEditImageUrl('')
                         }
-                        setEditModelImages(prev => [newImage, ...prev])
-                        setSelectedImageForEdit(newImage)
-                        setEditImageUrl(image.src)
-                      }
-                    })
-                  }}
-                  maxFiles={5}
-                  title="Upload Image to Edit"
-                  subtitle="Drag & drop images here or click to browse (max 5 images)"
-                  className="mb-4"
-                />
+                      }}
+                      disabled={!editImageUrl.trim()}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
 
                 <Separator />
 
