@@ -201,15 +201,8 @@ function App() {
           timestamp: new Date()
         }
         setEditedImages(prev => [newImage, ...prev])
-        // Add new edited image to model cards and select it for potential further editing
-        const newModelImage = {
-          id: Date.now() + 1,
-          src: `data:image/png;base64,${data.image}`,
-          prompt: editPrompt,
-          type: 'edited'
-        }
-        setEditModelImages(prev => [newModelImage, ...prev])
-        setSelectedImageForEdit(newModelImage)
+        // Select the newly edited image for potential further editing
+        setSelectedImageForEdit(newImage)
         setEditPrompt("")
         toast.success("Image edited successfully!")
         // Convert new image to file for next edit
@@ -510,6 +503,18 @@ function App() {
     }
   }
 
+  // Copy prompt to clipboard
+  const copyPromptToClipboard = (prompt) => {
+    if (prompt) {
+      navigator.clipboard.writeText(prompt).then(() => {
+        toast.success("Prompt copied to clipboard!")
+      }).catch((err) => {
+        console.error('Failed to copy prompt:', err)
+        toast.error("Failed to copy prompt")
+      })
+    }
+  }
+
   return (
     <ToastProvider>
       <ProcessingProgress
@@ -638,10 +643,88 @@ function App() {
 
           {/* Edit Tab */}
           <TabsContent value="edit" className="space-y-6">
+            {/* Image Model Cards - Only show uploaded images (not generated/edited) */}
+            {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Available Images</CardTitle>
+                  <CardDescription>Select an image to edit (max 5 uploaded images)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').map((image) => (
+                        <EnhancedImageCard
+                          key={image.id}
+                          image={image}
+                          onSendToCompose={sendToCompose}
+                          onDownload={downloadImage}
+                          onDelete={(imageId) => {
+                            setEditModelImages(prev => prev.filter(img => img.id !== imageId))
+                            if (selectedImageForEdit?.id === imageId) {
+                              setSelectedImageForEdit(null)
+                              setEditImage(null)
+                            }
+                            toast.success("Model image removed")
+                          }}
+                          onSelect={selectImageForEdit}
+                          isSelectable={true}
+                          isSelected={selectedImageForEdit?.id === image.id}
+                          hideEditIcon={true}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Separator />
+
+            {/* Edited Images Gallery */}
+            {editedImages.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Edited Images</CardTitle>
+                  <CardDescription>Select an edited image to edit further or copy its prompt</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {editedImages.map((image) => (
+                        <EnhancedImageCard
+                          key={image.id}
+                          image={image}
+                          onSendToCompose={sendToCompose}
+                          onDownload={downloadImage}
+                          onCopyPrompt={copyPromptToClipboard}
+                          onDelete={(imageId) => {
+                            setEditedImages(prev => prev.filter(img => img.id !== imageId))
+                            if (selectedImageForEdit?.id === imageId) {
+                              setSelectedImageForEdit(null)
+                              setEditImage(null)
+                            }
+                            toast.success("Edited image removed")
+                          }}
+                          onSelect={selectImageForEdit}
+                          isSelectable={true}
+                          isSelected={selectedImageForEdit?.id === image.id}
+                          hideEditIcon={true}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Separator />
+
+            {/* Edit Controls - At the bottom */}
             <Card>
               <CardHeader>
                 <CardTitle>Edit Image</CardTitle>
-                <CardDescription>Modify existing images with AI</CardDescription>
+                <CardDescription>Upload or select an image above, then describe your edits</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Show selected image preview */}
@@ -700,8 +783,8 @@ function App() {
                     })
                   }}
                   maxFiles={5}
-                  title="Upload/Edit Image"
-                  subtitle="Drag & drop images here or click to browse"
+                  title="Upload Image to Edit"
+                  subtitle="Drag & drop images here or click to browse (max 5 images)"
                   className="mb-4"
                 />
 
@@ -718,7 +801,6 @@ function App() {
                   />
                 </div>
 
-
                 <Button
                   onClick={handleEditImage}
                   disabled={loading || !editPrompt.trim() || (!selectedImageForEdit && !editImage && !editImageUrl.trim())}
@@ -728,82 +810,6 @@ function App() {
                 </Button>
               </CardContent>
             </Card>
-
-            <Separator />
-
-            {/* Image Model Cards */}
-            {editModelImages.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Available Images</CardTitle>
-                  <CardDescription>Select an image to edit</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {editModelImages.map((image) => (
-                        <EnhancedImageCard
-                          key={image.id}
-                          image={image}
-                          onSendToCompose={sendToCompose}
-                          onDownload={downloadImage}
-                          onDelete={(imageId) => {
-                            setEditModelImages(prev => prev.filter(img => img.id !== imageId))
-                            if (selectedImageForEdit?.id === imageId) {
-                              setSelectedImageForEdit(null)
-                              setEditImage(null)
-                            }
-                            toast.success("Model image removed")
-                          }}
-                          onSelect={selectImageForEdit}
-                          isSelectable={true}
-                          isSelected={selectedImageForEdit?.id === image.id}
-                          hideEditIcon={true}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Separator />
-
-            {/* Edited Images Gallery */}
-            {editedImages.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Edited Images</CardTitle>
-                  <CardDescription>Select an edited image to edit further</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {editedImages.map((image) => (
-                        <EnhancedImageCard
-                          key={image.id}
-                          image={image}
-                          onSendToCompose={sendToCompose}
-                          onDownload={downloadImage}
-                          onDelete={(imageId) => {
-                            setEditedImages(prev => prev.filter(img => img.id !== imageId))
-                            if (selectedImageForEdit?.id === imageId) {
-                              setSelectedImageForEdit(null)
-                              setEditImage(null)
-                            }
-                            toast.success("Edited image removed")
-                          }}
-                          onSelect={selectImageForEdit}
-                          isSelectable={true}
-                          isSelected={selectedImageForEdit?.id === image.id}
-                          hideEditIcon={true}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
 
           {/* Compose Tab */}

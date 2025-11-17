@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, CardContent } from "./ui/card"
-import { Download, Edit3, Layers, Info, Eye, Calendar, User, X, Maximize2, Check, Trash2 } from 'lucide-react'
+import { Download, Edit3, Layers, Info, Eye, Calendar, User, X, Maximize2, Check, Trash2, Copy } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ export function EnhancedImageCard({
   onDownload,
   onDelete,
   onSelect,
+  onCopyPrompt,
   isSelectable = false,
   isSelected = false,
   hideEditIcon = false
@@ -94,6 +95,17 @@ export function EnhancedImageCard({
                       title="Add to composition"
                     >
                       <Layers className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Copy Prompt Icon - Only show for edited images with prompts */}
+                  {onCopyPrompt && image.prompt && (
+                    <button
+                      onClick={() => onCopyPrompt(image.prompt)}
+                      className="p-2 bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all duration-200 hover:scale-110 shadow-lg"
+                      title="Copy prompt"
+                    >
+                      <Copy className="w-4 h-4" />
                     </button>
                   )}
 
