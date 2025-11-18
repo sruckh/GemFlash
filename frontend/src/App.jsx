@@ -675,91 +675,122 @@ function App() {
           </TabsContent>
 
           {/* Edit Tab */}
-          <TabsContent value="edit" className="space-y-6">
-            {/* Image Model Cards - Only show uploaded images (not generated/edited) */}
-            {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Available Images</CardTitle>
-                  <CardDescription>Select an image to edit (max 5 uploaded images)</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                      {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').map((image) => (
-                        <EnhancedImageCard
-                          key={image.id}
-                          image={image}
-                          onSendToCompose={sendToCompose}
-                          onDownload={downloadImage}
-                          onDelete={(imageId) => {
-                            setEditModelImages(prev => prev.filter(img => img.id !== imageId))
-                            if (selectedImageForEdit?.id === imageId) {
-                              setSelectedImageForEdit(null)
-                              setEditImage(null)
-                            }
-                            toast.success("Model image removed")
-                          }}
-                          onSelect={selectImageForEdit}
-                          isSelectable={true}
-                          isSelected={selectedImageForEdit?.id === image.id}
-                          hideEditIcon={true}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          <TabsContent value="edit" className="space-y-8">
+            {/* Available Images - Always visible with empty state */}
+            <div className="bg-card/50 border border-border/50 rounded-lg p-6" aria-live="polite" aria-atomic="false" aria-relevant="additions text">
+              <div className="flex items-center gap-3 mb-4">
+                <ImageIcon className="w-6 h-6" style={{ color: '#1945b7' }} />
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Your Images {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').length > 0 && `(${editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').length})`}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Select an image to edit
+                  </p>
+                </div>
+              </div>
 
-            <Separator />
+              {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <ImageIcon className="w-16 h-16 text-muted-foreground/40 mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">No images uploaded yet</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Upload images using the panel below to get started with editing
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {editModelImages.filter(img => img.type === 'uploaded' || img.type === 'url' || img.type === 'transferred').map((image) => (
+                    <EnhancedImageCard
+                      key={image.id}
+                      image={image}
+                      onSendToCompose={sendToCompose}
+                      onDownload={downloadImage}
+                      onDelete={(imageId) => {
+                        setEditModelImages(prev => prev.filter(img => img.id !== imageId))
+                        if (selectedImageForEdit?.id === imageId) {
+                          setSelectedImageForEdit(null)
+                          setEditImage(null)
+                        }
+                        toast.success("Model image removed")
+                      }}
+                      onSelect={selectImageForEdit}
+                      isSelectable={true}
+                      isSelected={selectedImageForEdit?.id === image.id}
+                      hideEditIcon={true}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Edited Images Gallery */}
-            {editedImages.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Edited Images</CardTitle>
-                  <CardDescription>Select an edited image to edit further or copy its prompt</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                      {editedImages.map((image) => (
-                        <EnhancedImageCard
-                          key={image.id}
-                          image={image}
-                          onSendToCompose={sendToCompose}
-                          onDownload={downloadImage}
-                          onCopyPrompt={copyPromptToClipboard}
-                          onDelete={(imageId) => {
-                            setEditedImages(prev => prev.filter(img => img.id !== imageId))
-                            if (selectedImageForEdit?.id === imageId) {
-                              setSelectedImageForEdit(null)
-                              setEditImage(null)
-                            }
-                            toast.success("Edited image removed")
-                          }}
-                          onSelect={selectImageForEdit}
-                          isSelectable={true}
-                          isSelected={selectedImageForEdit?.id === image.id}
-                          hideEditIcon={true}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Edited Images - Always visible with empty state */}
+            <div className="bg-card/50 border border-border/50 rounded-lg p-6" aria-live="polite" aria-atomic="false" aria-relevant="additions">
+              <div className="flex items-center gap-3 mb-4">
+                <Sparkles className="w-6 h-6" style={{ color: '#60710f' }} />
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Edited Results {editedImages.length > 0 && `(${editedImages.length})`}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Click any image to download or share
+                  </p>
+                </div>
+              </div>
 
-            <Separator />
+              {editedImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                  <Sparkles className="w-16 h-16 text-muted-foreground/40 mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">No edited images yet</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mb-2">
+                    Edited images will appear here after processing
+                  </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    Your images are ready to download once editing completes
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {editedImages.map((image) => (
+                    <EnhancedImageCard
+                      key={image.id}
+                      image={image}
+                      onSendToCompose={sendToCompose}
+                      onDownload={downloadImage}
+                      onCopyPrompt={copyPromptToClipboard}
+                      onDelete={(imageId) => {
+                        setEditedImages(prev => prev.filter(img => img.id !== imageId))
+                        if (selectedImageForEdit?.id === imageId) {
+                          setSelectedImageForEdit(null)
+                          setEditImage(null)
+                        }
+                        toast.success("Edited image removed")
+                      }}
+                      onSelect={selectImageForEdit}
+                      isSelectable={true}
+                      isSelected={selectedImageForEdit?.id === image.id}
+                      hideEditIcon={true}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Edit Controls - At the bottom */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Edit Image</CardTitle>
-                <CardDescription>Upload or select an image above, then describe your edits</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            {/* Edit Controls - Always visible with enhanced styling */}
+            <div className="bg-card border border-border rounded-lg p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Edit3 className="w-6 h-6" style={{ color: '#fb2' }} />
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Edit Image
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Select an image from Your Images to begin editing
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
                 {/* Two-column layout: Selected Image (left) and Upload Zone (right) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Left: Selected Image Preview */}
@@ -891,8 +922,8 @@ function App() {
                 >
                   {loading ? "Editing..." : "Edit Image"}
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Compose Tab */}

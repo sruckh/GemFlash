@@ -165,3 +165,30 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Enhanced Focus Indicators for Accessibility (WCAG 2.1 AA) */
+*:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+button:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+/* Image card focus */
+.image-card:focus-visible {
+  outline: 3px solid #2563EB;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.1);
+}
+
+/* Input focus */
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 0;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
