@@ -620,28 +620,47 @@ function App() {
                     </SelectContent>
                   </Select>
                 </div>
-                
-                <div>
-                  <Label htmlFor="prompt">Prompt</Label>
-                  <Textarea
-                    id="prompt"
-                    placeholder="Describe the image you want to generate..."
-                    value={generatePrompt}
-                    onChange={(e) => setGeneratePrompt(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                </div>
+              </CardContent>
+            </Card>
 
-                
+            <Separator />
+
+            {/* Prompt Area - Bottom with distinctive styling */}
+            <div className="rounded-lg p-6" style={{ backgroundColor: '#133489' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <Sparkles className="w-6 h-6" style={{ color: '#fb2' }} />
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: 'white' }}>
+                    Enter Your Prompt
+                  </h2>
+                  <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                    Describe the image you want to generate
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Textarea
+                  id="prompt"
+                  placeholder="Describe the image you want to generate..."
+                  value={generatePrompt}
+                  onChange={(e) => setGeneratePrompt(e.target.value)}
+                  className="min-h-[100px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+
                 <Button
                   onClick={handleGenerateImage}
                   disabled={loading || !generatePrompt.trim()}
-                  className="w-full"
+                  className="w-full disabled:opacity-100"
+                  style={{
+                    backgroundColor: (loading || !generatePrompt.trim()) ? '#e4dbe3' : '#ffc433',
+                    color: (loading || !generatePrompt.trim()) ? '#444245' : '#6f0063'
+                  }}
                 >
                   {loading ? "Generating..." : "Generate Image"}
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             <Separator />
 
@@ -776,16 +795,16 @@ function App() {
               )}
             </div>
 
-            {/* Edit Controls - Always visible with enhanced styling */}
+            {/* Upload Controls */}
             <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center gap-3 mb-4">
-                <Edit3 className="w-6 h-6" style={{ color: '#fb2' }} />
+                <Upload className="w-6 h-6 text-muted-foreground" />
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">
-                    Edit Image
+                    Upload Image
                   </h2>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    Select an image from Your Images to begin editing
+                    Select an image from Your Images or upload a new one
                   </p>
                 </div>
               </div>
@@ -901,24 +920,40 @@ function App() {
                     </Button>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <Separator />
-
+            {/* Prompt Area - Bottom with distinctive styling */}
+            <div className="rounded-lg p-6" style={{ backgroundColor: '#133489' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <Edit3 className="w-6 h-6" style={{ color: '#fb2' }} />
                 <div>
-                  <Label htmlFor="edit-prompt">Edit Prompt</Label>
-                  <Textarea
-                    id="edit-prompt"
-                    placeholder="Describe how you want to modify the selected image..."
-                    value={editPrompt}
-                    onChange={(e) => setEditPrompt(e.target.value)}
-                    className="min-h-[100px]"
-                  />
+                  <h2 className="text-xl font-semibold" style={{ color: 'white' }}>
+                    Enter Edit Prompt
+                  </h2>
+                  <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                    Describe how you want to modify the selected image
+                  </p>
                 </div>
+              </div>
+
+              <div className="space-y-4">
+                <Textarea
+                  id="edit-prompt"
+                  placeholder="Describe how you want to modify the selected image..."
+                  value={editPrompt}
+                  onChange={(e) => setEditPrompt(e.target.value)}
+                  className="min-h-[100px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
 
                 <Button
                   onClick={handleEditImage}
                   disabled={loading || !editPrompt.trim() || (!selectedImageForEdit && !editImage && !editImageUrl.trim())}
-                  className="w-full"
+                  className="w-full disabled:opacity-100"
+                  style={{
+                    backgroundColor: (loading || !editPrompt.trim() || (!selectedImageForEdit && !editImage && !editImageUrl.trim())) ? '#e4dbe3' : '#ffc433',
+                    color: (loading || !editPrompt.trim() || (!selectedImageForEdit && !editImage && !editImageUrl.trim())) ? '#444245' : '#6f0063'
+                  }}
                 >
                   {loading ? "Editing..." : "Edit Image"}
                 </Button>
@@ -963,32 +998,8 @@ function App() {
                   subtitle="Add multiple images to compose"
                   className="mb-4"
                 />
-
-                <Separator />
-
-                <div>
-                  <Label htmlFor="compose-prompt">Composition Prompt</Label>
-                  <Textarea
-                    id="compose-prompt"
-                    placeholder="Describe how you want to combine the selected images..."
-                    value={composePrompt}
-                    onChange={(e) => setComposePrompt(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                </div>
-
-
-                <Button
-                  onClick={handleComposeImages}
-                  disabled={loading || !composePrompt.trim() || selectedForCompose.size === 0}
-                  className="w-full"
-                >
-                  {loading ? "Composing..." : `Compose Selected Images (${selectedForCompose.size}/5)`}
-                </Button>
               </CardContent>
             </Card>
-
-            <Separator />
 
             {/* Available Images for Composition */}
             {composeImages.length > 0 && (
@@ -1019,6 +1030,45 @@ function App() {
                 </CardContent>
               </Card>
             )}
+
+            <Separator />
+
+            {/* Prompt Area - Bottom with distinctive styling */}
+            <div className="rounded-lg p-6" style={{ backgroundColor: '#133489' }}>
+              <div className="flex items-center gap-3 mb-4">
+                <Layers className="w-6 h-6" style={{ color: '#fb2' }} />
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: 'white' }}>
+                    Enter Composition Prompt
+                  </h2>
+                  <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                    Describe how you want to combine the selected images
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Textarea
+                  id="compose-prompt"
+                  placeholder="Describe how you want to combine the selected images..."
+                  value={composePrompt}
+                  onChange={(e) => setComposePrompt(e.target.value)}
+                  className="min-h-[100px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+
+                <Button
+                  onClick={handleComposeImages}
+                  disabled={loading || !composePrompt.trim() || selectedForCompose.size === 0}
+                  className="w-full disabled:opacity-100"
+                  style={{
+                    backgroundColor: (loading || !composePrompt.trim() || selectedForCompose.size === 0) ? '#e4dbe3' : '#ffc433',
+                    color: (loading || !composePrompt.trim() || selectedForCompose.size === 0) ? '#444245' : '#6f0063'
+                  }}
+                >
+                  {loading ? "Composing..." : `Compose Selected Images (${selectedForCompose.size}/5)`}
+                </Button>
+              </div>
+            </div>
 
             <Separator />
 
