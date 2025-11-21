@@ -1,13 +1,3 @@
-# Stage 1: Favicon Generation
-FROM debian:stable-slim AS favicon_generator
-
-RUN apt-get update && apt-get install -y wget imagemagick && rm -rf /var/lib/apt/lists/*
-
-RUN wget -O /tmp/logo.jpg https://snipshot.io/uploads/wlHDlHC.jpg
-
-RUN convert /tmp/logo.jpg -define icon:auto-resize=256,128,64,48,32,16 /tmp/favicon.ico
-
-# Stage 2: Frontend Build
 FROM node:20-slim AS frontend_builder
 
 WORKDIR /app
@@ -36,9 +26,6 @@ USER appuser
 
 ENV PATH="/home/appuser/.local/bin:${PATH}"
 
-# Copy favicon files to frontend public directory
-COPY --from=favicon_generator /tmp/favicon.ico /app/frontend/public/
-COPY --from=favicon_generator /tmp/favicon.ico /app/frontend/public/favicon.ico
 
 # Copy built React frontend
 COPY --from=frontend_builder /app/dist /app/frontend/dist

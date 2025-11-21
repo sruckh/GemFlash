@@ -24,11 +24,16 @@ function App() {
   const [activeTab, setActiveTab] = useState("generate")
   
   // Generate tab state
-  const [resolution, setResolution] = useState("1:1")
+  const [generateAspectRatio, setGenerateAspectRatio] = useState("1:1")
+  const [generateResolution, setGenerateResolution] = useState("1K")
+  const [generateOutputFormat, setGenerateOutputFormat] = useState("png")
   const [generatePrompt, setGeneratePrompt] = useState("")
   const [generatedImages, setGeneratedImages] = useState([])
-  
+
   // Edit tab state
+  const [editAspectRatio, setEditAspectRatio] = useState("1:1")
+  const [editResolution, setEditResolution] = useState("1K")
+  const [editOutputFormat, setEditOutputFormat] = useState("png")
   const [editPrompt, setEditPrompt] = useState("")
   const [editImage, setEditImage] = useState(null)
   const [editImageUrl, setEditImageUrl] = useState("")
@@ -37,6 +42,9 @@ function App() {
   const [editModelImages, setEditModelImages] = useState([])
   
   // Compose tab state
+  const [composeAspectRatio, setComposeAspectRatio] = useState("1:1")
+  const [composeResolution, setComposeResolution] = useState("1K")
+  const [composeOutputFormat, setComposeOutputFormat] = useState("png")
   const [composePrompt, setComposePrompt] = useState("")
   const [composeImages, setComposeImages] = useState([])
   const [selectedForCompose, setSelectedForCompose] = useState(new Set())
@@ -88,16 +96,28 @@ function App() {
   })
 
   const aspectRatios = [
-    { value: "1:1", label: "1:1 Square (1024×1024px) - Social Media Profile" },
-    { value: "2:3", label: "2:3 Portrait (832×1248px) - Print/Poster" },
-    { value: "3:2", label: "3:2 Landscape (1248×832px) - Photography" },
-    { value: "3:4", label: "3:4 Portrait (864×1184px) - Social Posts" },
-    { value: "4:3", label: "4:3 Standard (1184×864px) - Photo Landscape" },
-    { value: "4:5", label: "4:5 Portrait (896×1152px) - Instagram" },
-    { value: "5:4", label: "5:4 Landscape (1152×896px) - Classic Photo" },
-    { value: "9:16", label: "9:16 Portrait (768×1344px) - Mobile/Stories" },
-    { value: "16:9", label: "16:9 Widescreen (1344×768px) - Desktop/Video" },
-    { value: "21:9", label: "21:9 Ultra-wide (1536×672px) - Cinematic" },
+    { value: "1:1", label: "1:1 Square - Social Media" },
+    { value: "2:3", label: "2:3 Portrait - Photography" },
+    { value: "3:2", label: "3:2 Landscape - Photography" },
+    { value: "3:4", label: "3:4 Portrait - Social Media, Print" },
+    { value: "4:3", label: "4:3 Landscape - Photography, Old TV" },
+    { value: "4:5", label: "4:5 Portrait - Instagram posts" },
+    { value: "5:4", label: "5:4 Landscape - Photography" },
+    { value: "9:16", label: "9:16 Vertical - Mobile Video (Reels/Shorts)" },
+    { value: "16:9", label: "16:9 Landscape - Widescreen Video/Web" },
+    { value: "21:9", label: "21:9 Ultra-Widescreen - Cinematic" },
+  ]
+
+  const resolutions = [
+    { value: "1K", label: "1K - Standard (~1024×1024)" },
+    { value: "2K", label: "2K - High (~2048×2048)" },
+    { value: "4K", label: "4K - Ultra-high (~3840×2160+)" },
+  ]
+
+  const outputFormats = [
+    { value: "png", label: "PNG - Lossless" },
+    { value: "jpeg", label: "JPEG - Compressed" },
+    { value: "webp", label: "WebP - Modern" },
   ]
 
   // Generate image handler
@@ -132,7 +152,9 @@ function App() {
         },
         body: JSON.stringify({
           prompt: generatePrompt,
-          aspect_ratio: resolution
+          aspect_ratio: generateAspectRatio,
+          output_resolution: generateResolution,
+          output_format: generateOutputFormat
         }),
       })
       
@@ -147,7 +169,8 @@ function App() {
           id: Date.now(),
           src: `data:image/png;base64,${data.image}`,
           prompt: generatePrompt,
-          aspect_ratio: resolution,
+          aspect_ratio: generateAspectRatio,
+          resolution: generateResolution,
           type: 'generated',
           timestamp: new Date()
         }
@@ -198,7 +221,9 @@ function App() {
     try {
       const formData = new FormData()
       formData.append('prompt', editPrompt)
-      formData.append('aspect_ratio', resolution)
+      formData.append('aspect_ratio', editAspectRatio)
+      formData.append('output_resolution', editResolution)
+      formData.append('output_format', editOutputFormat)
       
       // Use selected image if available
       if (selectedImageForEdit && editImage) {
@@ -291,7 +316,10 @@ function App() {
     try {
       const formData = new FormData()
       formData.append('prompt', composePrompt)
-      
+      formData.append('aspect_ratio', composeAspectRatio)
+      formData.append('output_resolution', composeResolution)
+      formData.append('output_format', composeOutputFormat)
+
       // Add selected images
       selectedImages.forEach((img, index) => {
         if (img.file) {
@@ -605,20 +633,52 @@ function App() {
                 <CardDescription>Create new images from text prompts</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="resolution">Aspect Ratio</Label>
-                  <Select value={resolution} onValueChange={setResolution}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {aspectRatios.map((ratio) => (
-                        <SelectItem key={ratio.value} value={ratio.value}>
-                          {ratio.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="generate-aspect-ratio">Aspect Ratio</Label>
+                    <Select value={generateAspectRatio} onValueChange={setGenerateAspectRatio}>
+                      <SelectTrigger id="generate-aspect-ratio">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aspectRatios.map((ratio) => (
+                          <SelectItem key={ratio.value} value={ratio.value}>
+                            {ratio.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="generate-resolution">Output Resolution</Label>
+                    <Select value={generateResolution} onValueChange={setGenerateResolution}>
+                      <SelectTrigger id="generate-resolution">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {resolutions.map((res) => (
+                          <SelectItem key={res.value} value={res.value}>
+                            {res.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="generate-output-format">Output Format</Label>
+                    <Select value={generateOutputFormat} onValueChange={setGenerateOutputFormat}>
+                      <SelectTrigger id="generate-output-format">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {outputFormats.map((format) => (
+                          <SelectItem key={format.value} value={format.value}>
+                            {format.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -695,6 +755,162 @@ function App() {
 
           {/* Edit Tab */}
           <TabsContent value="edit" className="space-y-8">
+            {/* Settings Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Output Settings</CardTitle>
+                <CardDescription>Configure aspect ratio and resolution for edited images</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="edit-aspect-ratio">Aspect Ratio</Label>
+                    <Select value={editAspectRatio} onValueChange={setEditAspectRatio}>
+                      <SelectTrigger id="edit-aspect-ratio">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aspectRatios.map((ratio) => (
+                          <SelectItem key={ratio.value} value={ratio.value}>
+                            {ratio.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-resolution">Output Resolution</Label>
+                    <Select value={editResolution} onValueChange={setEditResolution}>
+                      <SelectTrigger id="edit-resolution">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {resolutions.map((res) => (
+                          <SelectItem key={res.value} value={res.value}>
+                            {res.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-output-format">Output Format</Label>
+                    <Select value={editOutputFormat} onValueChange={setEditOutputFormat}>
+                      <SelectTrigger id="edit-output-format">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {outputFormats.map((format) => (
+                          <SelectItem key={format.value} value={format.value}>
+                            {format.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Upload Controls - Moved right after Settings */}
+            <div className="bg-card border border-border rounded-lg p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Upload className="w-6 h-6 text-muted-foreground" />
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Upload Image
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Select an image from Your Images or upload a new one
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Two-column layout: Upload Zone (left) and URL Input (right) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Left: Compact Upload Zone */}
+                  <div className="flex flex-col">
+                    <Label className="mb-2">Upload New Image</Label>
+                    <div className="flex-1 min-h-[200px]">
+                      <div
+                        {...getRootProps()}
+                        className={`h-full border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200 flex flex-col items-center justify-center p-4 ${
+                          isDragActive
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                        }`}
+                      >
+                        <input {...getInputProps()} />
+                        <Upload className="w-12 h-12 text-blue-500 mb-3" />
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 text-center">
+                          Drop image here
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 text-center mb-2">
+                          or click to browse
+                        </p>
+                        <div className="text-xs text-gray-500 text-center space-y-0.5">
+                          <p>Max 5 files</p>
+                          <p>JPG, PNG, WEBP, GIF</p>
+                          <p>Max 10MB each</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: URL Input */}
+                  <div className="flex flex-col">
+                    <Label htmlFor="image-url" className="mb-2">Or add image from URL</Label>
+                    <div className="flex flex-col gap-2 flex-1">
+                      <Input
+                        id="image-url"
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        value={editImageUrl}
+                        onChange={(e) => setEditImageUrl(e.target.value)}
+                        className="flex-1"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && editImageUrl.trim()) {
+                            const newImage = {
+                              id: Date.now(),
+                              src: editImageUrl,
+                              name: 'URL Image',
+                              type: 'url',
+                              timestamp: new Date()
+                            }
+                            setEditModelImages(prev => [newImage, ...prev])
+                            setSelectedImageForEdit(newImage)
+                            setEditImageUrl('')
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => {
+                          if (editImageUrl.trim()) {
+                            const newImage = {
+                              id: Date.now(),
+                              src: editImageUrl,
+                              name: 'URL Image',
+                              type: 'url',
+                              timestamp: new Date()
+                            }
+                            setEditModelImages(prev => [newImage, ...prev])
+                            setSelectedImageForEdit(newImage)
+                            setEditImageUrl('')
+                          }
+                        }}
+                        disabled={!editImageUrl.trim()}
+                        className="bg-blue-600 hover:bg-blue-700 w-full"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add from URL
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Available Images - Always visible with empty state */}
             <div className="bg-card/50 border border-border/50 rounded-lg p-6" aria-live="polite" aria-atomic="false" aria-relevant="additions text">
               <div className="flex items-center gap-3 mb-4">
@@ -714,7 +930,7 @@ function App() {
                   <ImageIcon className="w-16 h-16 text-muted-foreground/40 mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">No images uploaded yet</h3>
                   <p className="text-sm text-muted-foreground max-w-md">
-                    Upload images using the panel below to get started with editing
+                    Upload images using the panel above to get started with editing
                   </p>
                 </div>
               ) : (
@@ -795,149 +1011,38 @@ function App() {
               )}
             </div>
 
-            {/* Upload Controls */}
-            <div className="bg-card border border-border rounded-lg p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Upload className="w-6 h-6 text-muted-foreground" />
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Upload Image
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Select an image from Your Images or upload a new one
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {/* Two-column layout: Selected Image (left) and Upload Zone (right) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Left: Selected Image Preview */}
-                  <div className="flex flex-col">
-                    <Label className="mb-2">Selected Image</Label>
-                    {selectedImageForEdit ? (
-                      <Card className="border-primary/20 bg-primary/5 flex-1">
-                        <CardContent className="p-4 h-full flex items-center justify-center">
-                          <div className="text-center">
-                            <img
-                              src={selectedImageForEdit.src}
-                              alt="Selected"
-                              className="max-w-full max-h-64 object-contain rounded-lg border mx-auto"
-                            />
-                            <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                              {selectedImageForEdit.prompt || 'Ready for editing'}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <Card className="border-dashed border-2 flex-1">
-                        <CardContent className="p-4 h-full flex items-center justify-center min-h-[280px]">
-                          <p className="text-sm text-muted-foreground text-center">
-                            No image selected<br />
-                            Select an image above or upload one
-                          </p>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-
-                  {/* Right: Compact Upload Zone */}
-                  <div className="flex flex-col">
-                    <Label className="mb-2">Upload New Image</Label>
-                    <div className="flex-1 min-h-[280px]">
-                      <div
-                        {...getRootProps()}
-                        className={`h-full border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200 flex flex-col items-center justify-center p-4 ${
-                          isDragActive
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
-                            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
-                        }`}
-                      >
-                        <input {...getInputProps()} />
-                        <Upload className="w-12 h-12 text-blue-500 mb-3" />
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 text-center">
-                          Drop image here
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 text-center mb-2">
-                          or click to browse
-                        </p>
-                        <div className="text-xs text-gray-500 text-center space-y-0.5">
-                          <p>Max 5 files</p>
-                          <p>JPG, PNG, WEBP, GIF</p>
-                          <p>Max 10MB each</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* URL Input - Compact */}
-                <div>
-                  <Label htmlFor="image-url" className="text-sm">Or add image from URL</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      id="image-url"
-                      type="url"
-                      placeholder="https://example.com/image.jpg"
-                      value={editImageUrl}
-                      onChange={(e) => setEditImageUrl(e.target.value)}
-                      className="flex-1"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && editImageUrl.trim()) {
-                          const newImage = {
-                            id: Date.now(),
-                            src: editImageUrl,
-                            name: 'URL Image',
-                            type: 'url',
-                            timestamp: new Date()
-                          }
-                          setEditModelImages(prev => [newImage, ...prev])
-                          setSelectedImageForEdit(newImage)
-                          setEditImageUrl('')
-                        }
-                      }}
-                    />
-                    <Button
-                      onClick={() => {
-                        if (editImageUrl.trim()) {
-                          const newImage = {
-                            id: Date.now(),
-                            src: editImageUrl,
-                            name: 'URL Image',
-                            type: 'url',
-                            timestamp: new Date()
-                          }
-                          setEditModelImages(prev => [newImage, ...prev])
-                          setSelectedImageForEdit(newImage)
-                          setEditImageUrl('')
-                        }
-                      }}
-                      disabled={!editImageUrl.trim()}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Prompt Area - Bottom with distinctive styling */}
+            {/* Prompt Area - Bottom with distinctive styling and Selected Image inline */}
             <div className="rounded-lg p-6" style={{ backgroundColor: '#133489' }}>
-              <div className="flex items-center gap-3 mb-4">
-                <Edit3 className="w-6 h-6" style={{ color: '#fb2' }} />
-                <div>
-                  <h2 className="text-xl font-semibold" style={{ color: 'white' }}>
-                    Enter Edit Prompt
-                  </h2>
-                  <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                    Describe how you want to modify the selected image
-                  </p>
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <Edit3 className="w-6 h-6" style={{ color: '#fb2' }} />
+                  <div>
+                    <h2 className="text-xl font-semibold" style={{ color: 'white' }}>
+                      Enter Edit Prompt
+                    </h2>
+                    <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                      Describe how you want to modify the selected image
+                    </p>
+                  </div>
                 </div>
+
+                {/* Selected Image Preview - Compact display to the right */}
+                {selectedImageForEdit && (
+                  <div className="flex flex-col items-center gap-1 ml-4">
+                    <img
+                      src={selectedImageForEdit.src}
+                      alt="Selected"
+                      className="w-24 h-24 object-cover rounded-lg border border-white/30"
+                    />
+                    <p className="text-xs text-white/80 text-center max-w-[120px] line-clamp-2">
+                      {selectedImageForEdit.prompt || 'Ready for editing'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
+
                 <Textarea
                   id="edit-prompt"
                   placeholder="Describe how you want to modify the selected image..."
@@ -963,6 +1068,62 @@ function App() {
 
           {/* Compose Tab */}
           <TabsContent value="compose" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Output Settings</CardTitle>
+                <CardDescription>Configure aspect ratio and resolution for composed images</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="compose-aspect-ratio">Aspect Ratio</Label>
+                    <Select value={composeAspectRatio} onValueChange={setComposeAspectRatio}>
+                      <SelectTrigger id="compose-aspect-ratio">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {aspectRatios.map((ratio) => (
+                          <SelectItem key={ratio.value} value={ratio.value}>
+                            {ratio.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="compose-resolution">Output Resolution</Label>
+                    <Select value={composeResolution} onValueChange={setComposeResolution}>
+                      <SelectTrigger id="compose-resolution">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {resolutions.map((res) => (
+                          <SelectItem key={res.value} value={res.value}>
+                            {res.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="compose-output-format">Output Format</Label>
+                    <Select value={composeOutputFormat} onValueChange={setComposeOutputFormat}>
+                      <SelectTrigger id="compose-output-format">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {outputFormats.map((format) => (
+                          <SelectItem key={format.value} value={format.value}>
+                            {format.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Compose Images</CardTitle>

@@ -20,12 +20,28 @@
 example/
 examples/
 
+# Development tools and caches
+.superdesign/
+.serena/cache/
+node_modules/
+.DS_Store
+*.log
+
+# Docker
+.docker/
+docker-compose.override.yml
+.serena/memories/
+*.backup
+
 # Claude Flow generated files
 .claude/settings.local.json
 .mcp.json
 claude-flow.config.json
 .swarm/
 .hive-mind/
+.claude-flow/
+memory/
+coordination/
 memory/claude-flow-data.json
 memory/sessions/*
 !memory/sessions/README.md
@@ -41,22 +57,5 @@ coordination/orchestration/*
 *.sqlite-journal
 *.sqlite-wal
 claude-flow
-claude-flow.bat
-claude-flow.ps1
+# Removed Windows wrapper files per user request
 hive-mind-prompt-*.txt
-
-# Development tools and caches
-.superdesign/
-.serena/cache/
-node_modules/
-.DS_Store
-*.log
-
-# Docker
-.docker/
-docker-compose.override.yml
-.claude-flow/metrics/system-metrics.json
-.serena/memories/
-*.backup
-/.claude-flow/metrics/system-metrics.json
-**/.claude-flow/metrics/system-metrics.json

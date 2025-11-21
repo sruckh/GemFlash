@@ -15,6 +15,68 @@ The user can now build and run the application using `docker-compose`.
 
 ## Recent Updates - UI Improvements and Bug Fixes
 
+### Image Display Fix and Icon Overlay Enhancement (Current Session)
+
+**Issues Identified and Resolved:**
+
+1. **Duplicate Image Display in EnhancedImageCard Component**
+   - **Problem**: Images were being displayed twice in each card - once as a square thumbnail and again as a video aspect ratio preview
+   - **Root Cause**: Component had two separate image elements rendering the same source
+   - **Solution**: Removed the duplicate image display and optimized the single image display
+   - **Implementation**:
+     - Removed the redundant `aspect-video` image preview section (lines 66-78 in original)
+     - Changed main image container from `aspect-square` to flexible height with `max-h-96`
+     - Updated image CSS from `object-cover` to `object-contain` to show full image without cropping
+     - Result: Single image display that scales properly to fit within the card while showing the entire image
+
+2. **Added Icon Overlay System with Color-Themed Actions**
+   - **Enhancement**: Replaced bottom action buttons with hover-activated icon overlays on images
+   - **UX Improvement**: Icons appear directly on the image with smooth hover animations
+   - **Implementation**:
+     - Added hover state management (`isHovered`)
+     - Created gradient overlay that appears on hover with smooth transitions
+     - Implemented color-themed circular icon buttons:
+       - **View** (Primary blue): Maximize2 icon - Opens full-size modal
+       - **Edit** (Blue): Edit3 icon - Sends to edit tab
+       - **Compose** (Green): Layers icon - Adds to composition
+       - **Download** (Purple): Download icon - Downloads image
+     - Added hover effects: scale animation and shadow effects
+     - Icons positioned at bottom center of image with proper spacing
+
+3. **Full-Size Image Viewer Modal**
+   - **Feature**: Added modal dialog for viewing images at full resolution
+   - **UX Design**: Dark background with centered image display
+   - **Implementation**:
+     - Used shadcn/ui Dialog component for modal functionality
+     - Full viewport sizing (90vw x 90vh) for maximum viewing area
+     - Black/transparent background for focus on image
+     - Custom close button with white icon on dark background
+     - Image info overlay at bottom showing type and prompt
+     - Responsive image sizing with `object-contain` to maintain aspect ratio
+     - Easy close via ESC key or X button
+
+4. **Edit Tab Consistency and Selection System**
+   - **Enhancement**: Applied consistent icon overlay style to Edit tab with selection functionality
+   - **Selection UI**: Added top-right selection indicator with visual feedback
+   - **Implementation**:
+     - Enhanced `EnhancedImageCard` with selection props: `isSelectable`, `isSelected`, `onSelect`, `hideEditIcon`
+     - Added selection indicator (checkbox/check icon) in top-right corner
+     - Visual selection feedback: primary ring, scale effect, and color changes
+     - Single-selection logic: only one image can be selected for editing at a time
+     - Applied to both "Available Images" and "Edited Images" sections
+     - Icon consistency: View, Compose, Download (Edit icon hidden since already on Edit tab)
+     - Clear visual distinction between selected and unselected images
+     - Integrated with existing `selectImageForEdit` function for seamless functionality
+
+5. **Cross-Tab Icon Consistency**
+   - **Result**: All three tabs (Generate, Edit, Compose) now have consistent icon overlay systems
+   - **Generate Tab**: View, Edit, Compose, Download icons
+   - **Edit Tab**: View, Compose, Download icons + Selection system
+   - **Compose Tab**: View, Edit, Compose, Download icons (already implemented)
+   - **Consistent UX**: Hover animations, color themes, and positioning across all tabs
+
+## Recent Updates - UI Improvements and Bug Fixes
+
 ### Compose Tab Enhancements (Latest Session)
 
 **Issues Identified and Resolved:**
@@ -111,6 +173,77 @@ const sendToEditTab = async (image) => {
 
 The application now provides a complete and optimized user experience across all tabs with proper image management workflows.
 
+## Recent Updates - Edit Tab UX/UI Improvements (Latest Session)
+
+**Issues Identified and Resolved:**
+
+1. **URL Upload Explanation** - Added clear explanation text for URL image upload feature
+   - **Problem**: URL upload field lacked explanation text, making it unclear to users
+   - **Solution**: Added explanatory text in CardHeader: "Upload an image to edit using a URL link"
+   - **Implementation**: Modified `EnhancedImageUpload.jsx` to include subtitle explaining URL upload purpose
+
+2. **Image Preview Modal Implementation** - Made eye icon functional with modal preview
+   - **Problem**: Eye icon in uploaded images section was non-functional
+   - **Solution**: Implemented modal preview using Dialog component with proper sizing
+   - **Implementation**: 
+     - Added Dialog import and replaced window.open with Dialog component
+     - Created full-screen modal with image fitting and easy close mechanism
+     - Modal displays image at maximum size while maintaining aspect ratio
+     - Added gradient overlay with image title for better UX
+
+3. **Consistent Look & Feel** - Redesigned image cards for mobile-friendly interface
+   - **Problem**: Edit Images section had inconsistent design compared to Edited Images section
+   - **Root Cause**: Heavy reliance on hover-based interactions (tooltips, hover cards) which don't work well on mobile
+   - **Solution**: Completely redesigned `EnhancedImageCard.jsx` to be mobile-friendly:
+     - Removed HoverCard and Tooltip components entirely
+     - Replaced hover-based interactions with always-visible, labeled buttons
+     - Added larger image preview area (aspect-video format)
+     - Implemented explicit action buttons with clear labels (Download, Edit, Compose, Remove)
+     - Maintained responsive design that works on both desktop and mobile
+
+4. **Remove Unnecessary Hover Overlays** - Eliminated redundant hover interactions
+   - **Problem**: Edited images had unnecessary hover overlay showing duplicate image
+   - **Solution**: Removed hover overlay functionality as it served no purpose
+   - **Implementation**: Simplified image display to show image directly without redundant hover states
+
+5. **Fix Vertical Scroll Bars** - Removed fixed-height ScrollArea components
+   - **Problem**: Edit Images section used fixed-height ScrollArea causing vertical scroll bars
+   - **Solution**: Replaced ScrollArea components with simple div containers
+   - **Implementation**: Modified `App.jsx` in both "Available Images" and "Edited Images" sections:
+     - Changed `<ScrollArea className="h-[400px] w-full rounded-md border p-4">` 
+     - To `<div className="p-4">` for natural content flow
+
+**Technical Implementation Details:**
+
+**Files Modified:**
+- `frontend/src/components/EnhancedImageUpload.jsx` - Added URL explanation and modal functionality
+- `frontend/src/components/EnhancedImageCard.jsx` - Complete mobile-friendly redesign
+- `frontend/src/App.jsx` - Removed ScrollArea components to eliminate vertical scrolling
+- `TAKS.md` - Created comprehensive task tracking and development documentation
+
+**Key Design Changes:**
+- Mobile-first approach replacing hover-dependent interactions
+- Consistent visual language across all image card components
+- Improved accessibility with explicit, labeled controls
+- Better space utilization and responsive design
+
+**Testing Verification:**
+- ✅ URL upload now includes clear explanation text
+- ✅ Eye icon opens functional modal with proper image scaling
+- ✅ All image cards have consistent mobile-friendly design
+- ✅ No unnecessary hover overlays remaining
+- ✅ Vertical scroll bars eliminated from Edit Images section
+- ✅ Container rebuilt with --no-cache option and restarted successfully
+
+**User Experience Improvements:**
+- Clear guidance for URL upload feature
+- Full-screen image preview with easy close mechanism
+- Mobile-friendly interface accessible to all users
+- Consistent visual design throughout the application
+- Natural content flow without scroll bar restrictions
+
+The application now provides a significantly improved user experience across all devices with particular attention to mobile accessibility and consistent design language.
+
 ### Aspect Ratio Implementation (Latest Update)
 
 **Issue**: The application was using pixel-based resolution settings (e.g., "1024x1024") which are not supported by the Gemini 2.5 Flash Image API. The API actually uses aspect ratio settings ("1:1", "16:9", etc.) to control image dimensions.
@@ -162,7 +295,7 @@ async def edit_image(
 
 # Updated Gemini API calls to use aspect_ratio configuration
 response = client.models.generate_content(
-    model="gemini-2.5-flash-image-preview",
+    model="gemini-2.5-flash-image",
     contents={"parts": [{"text": detailed_prompt}]},
     config=types.GenerateContentConfig(
         response_modalities=["IMAGE"],
@@ -197,7 +330,7 @@ response = client.models.generate_content(
 After extensive research into the google.genai library documentation, we discovered that **Gemini 2.5 Flash Image models do NOT support aspect_ratio parameters in GenerateContentConfig**. The validation error "aspect_ratio Extra inputs are not permitted" was caused by attempting to use Imagen-style parameters with Gemini models.
 
 **Correct Implementation:**
-- **Gemini 2.5 Flash Image** (`gemini-2.5-flash-image-preview`): Aspect ratio specified via prompt text
+- **Gemini 2.5 Flash Image** (`gemini-2.5-flash-image`): Aspect ratio specified via prompt text
 - **Imagen models** (`imagen-3.0-generate-002`): Aspect ratio via GenerateImagesConfig parameter
 
 **Final Solution:**

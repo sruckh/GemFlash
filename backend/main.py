@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import google.genai as genai
 from google.genai import types
+import httpx
 import os
 import base64
 import io
@@ -25,17 +26,31 @@ api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY environment variable is required")
 
-client = genai.Client(api_key=api_key)
+# Get model name from environment, with fallback to default
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3-pro-image-preview")
+
+# Create client with extended timeout for image generation (120 seconds)
+# Pass timeout to httpx client via client_args in http_options
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(
+        client_args={'timeout': httpx.Timeout(120.0, connect=60.0)}
+    )
+)
 
 # Models
 class ImageGenerationRequest(BaseModel):
     prompt: str
     aspect_ratio: str = "1:1"
+    output_resolution: str = "1K"
+    output_format: str = "png"
 
 class ImageEditRequest(BaseModel):
     prompt: str
     image_urls: List[str] = []
     aspect_ratio: str = "1:1"
+    output_resolution: str = "1K"
+    output_format: str = "png"
 
 # Utility function to process image data
 def process_image_response(response):
@@ -273,13 +288,21 @@ Technical Specifications:
 
 Output: Return ONLY the final generated image. Do not return text."""
 
-            # Use the working pixshop format: contents with parts array
-            # Remove aspect_ratio from config as it's not supported by GenerateContentConfig
+            # Use generate_content with IMAGE response modality for Gemini models
             response = client.models.generate_content(
-                model="gemini-2.5-flash-image",
-                contents={"parts": [{"text": final_prompt}]},
+                model=GEMINI_MODEL,
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=final_prompt)]
+                    )
+                ],
                 config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE"]
+                    response_modalities=["IMAGE", "TEXT"],
+                    image_config=types.ImageConfig(
+                        aspect_ratio=request.aspect_ratio,
+                        image_size=request.output_resolution
+                    )
                 )
             )
             print(f"client.models.generate_content completed successfully")
@@ -290,15 +313,35 @@ Output: Return ONLY the final generated image. Do not return text."""
             raise e
         
         print(f"Response received: {type(response)}")
-        print(f"Response attributes: {dir(response)}")
+
+        # Check for prompt feedback and safety ratings
+        if hasattr(response, 'prompt_feedback'):
+            print(f"⚠️ Prompt Feedback: {response.prompt_feedback}")
+            if hasattr(response.prompt_feedback, 'block_reason'):
+                print(f"🚫 Block Reason: {response.prompt_feedback.block_reason}")
+            if hasattr(response.prompt_feedback, 'safety_ratings'):
+                print(f"🛡️ Prompt Safety Ratings: {response.prompt_feedback.safety_ratings}")
+
         if hasattr(response, 'candidates'):
             print(f"Candidates: {response.candidates}")
             if response.candidates:
                 print(f"First candidate: {response.candidates[0]}")
+
+                # Check safety ratings
+                if hasattr(response.candidates[0], 'safety_ratings'):
+                    print(f"🛡️ Candidate Safety Ratings: {response.candidates[0].safety_ratings}")
+
+                # Check finish reason
+                if hasattr(response.candidates[0], 'finish_reason'):
+                    print(f"🏁 Finish Reason: {response.candidates[0].finish_reason}")
+
                 if hasattr(response.candidates[0], 'content'):
                     print(f"Content: {response.candidates[0].content}")
                     if hasattr(response.candidates[0].content, 'parts'):
                         print(f"Parts: {response.candidates[0].content.parts}")
+            else:
+                print(f"❌ No candidates in response - checking for block/safety issues")
+                print(f"📋 Full response: {response}")
         
         image_data = process_image_response(response)
         print(f"Image data extracted: {image_data is not None}")
@@ -343,6 +386,8 @@ Output: Return ONLY the final generated image. Do not return text."""
 async def edit_image(
     prompt: str = Form(...),
     aspect_ratio: str = Form(default="1:1"),
+    output_resolution: str = Form(default="1K"),
+    output_format: str = Form(default="png"),
     image_urls: str = Form(default=""),
     image_file: UploadFile = File(default=None)
 ):
@@ -429,21 +474,42 @@ Output: Return ONLY the final edited image. Do not return text."""
 
         # Add the detailed prompt as text part
         parts.append({"text": detailed_prompt})
-        
+
         print(f"Sending {len(parts)} parts to API: {len([p for p in parts if 'inlineData' in p])} image(s) + 1 text prompt")
-        
-        # Use the working pixshop format: contents with parts array
-        # Remove aspect_ratio from config as it's not supported by GenerateContentConfig
+
+        # Use generate_content with multimodal input (images + text) for Gemini
+        # Convert parts to proper Content structure
+        content_parts = []
+        for part in parts:
+            if "inlineData" in part:
+                content_parts.append(types.Part(
+                    inline_data=types.Blob(
+                        mime_type=part["inlineData"]["mimeType"],
+                        data=part["inlineData"]["data"]
+                    )
+                ))
+            elif "text" in part:
+                content_parts.append(types.Part.from_text(text=part["text"]))
+
         response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents={"parts": parts},
+            model=GEMINI_MODEL,
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=content_parts
+                )
+            ],
             config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"]
+                response_modalities=["IMAGE", "TEXT"],
+                image_config=types.ImageConfig(
+                    aspect_ratio=aspect_ratio,
+                    image_size=output_resolution
+                )
             )
         )
-        
+
         image_data = process_image_response(response)
-        
+
         if image_data:
             return {
                 "message": "Image edited successfully",
@@ -482,6 +548,9 @@ Output: Return ONLY the final edited image. Do not return text."""
 @api.post("/compose_images")
 async def compose_images(
     prompt: str = Form(...),
+    aspect_ratio: str = Form(default="1:1"),
+    output_resolution: str = Form(default="1K"),
+    output_format: str = Form(default="png"),
     image_files: List[UploadFile] = File(default=[])
 ):
     try:
@@ -514,18 +583,40 @@ Output: Return ONLY the final composed image. Do not return text."""
 
         # Add the detailed prompt as text part
         parts.append({"text": detailed_prompt})
-        
-        # Use the working pixshop format: contents with parts array
+
+        # Use generate_content with multimodal input for Gemini composition
+        # Convert parts to proper Content structure
+        content_parts = []
+        for part in parts:
+            if "inlineData" in part:
+                content_parts.append(types.Part(
+                    inline_data=types.Blob(
+                        mime_type=part["inlineData"]["mimeType"],
+                        data=part["inlineData"]["data"]
+                    )
+                ))
+            elif "text" in part:
+                content_parts.append(types.Part.from_text(text=part["text"]))
+
         response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents={"parts": parts},
+            model=GEMINI_MODEL,
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=content_parts
+                )
+            ],
             config=types.GenerateContentConfig(
-                response_modalities=["IMAGE", "TEXT"]
+                response_modalities=["IMAGE", "TEXT"],
+                image_config=types.ImageConfig(
+                    aspect_ratio=aspect_ratio,
+                    image_size=output_resolution
+                )
             )
         )
-        
+
         image_data = process_image_response(response)
-        
+
         if image_data:
             return {
                 "message": "Images composed successfully",
