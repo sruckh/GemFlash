@@ -595,7 +595,7 @@ function App() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">GemFlash</h1>
-              <p className="text-sm text-muted-foreground">Powered by Google Gemini 2.5 Flash Image</p>
+              <p className="text-sm text-muted-foreground">Powered by Google Gemini 3 Pro Image</p>
             </div>
           </div>
         </div>
