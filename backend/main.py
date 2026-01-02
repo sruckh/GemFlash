@@ -176,102 +176,11 @@ async def generate_image(request: ImageGenerationRequest):
                 "cinematic": f"{request.aspect_ratio} composition"
             })
             
-            # Step 1: Intelligent prompt optimization following Google's recommendations
-            word_count = len(request.prompt.split())
-            char_count = len(request.prompt)
-            
-            if word_count > 50 or char_count > 300:
-                # Complex prompt - optimize and summarize
-                print(f"🔍 Complex prompt detected ({char_count} chars, {word_count} words) - optimizing and summarizing")
-                meta_prompt = f"""Optimize this overly complex image prompt. Keep only essential visual elements, make it concise and descriptive. Limit response to 100 words maximum.
-
-Original: "{request.prompt}"
-
-Optimized prompt:"""
-            else:
-                # Simple prompt - enhance with details  
-                print(f"🔍 Simple prompt detected ({char_count} chars, {word_count} words) - enhancing with details")
-                meta_prompt = f"""Enhance this simple image prompt with specific visual details, lighting, and photographic elements. Keep response under 100 words.
-
-Original: "{request.prompt}"
-
-Enhanced prompt:"""
-
-            # Call Gemini 2.5 Flash for prompt enhancement
-            try:
-                print(f"🔄 Calling Gemini 2.5 Flash for enhancement...")
-                print(f"📝 Meta-prompt length: {len(meta_prompt)} characters")
-                
-                enhancement_response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents={"parts": [{"text": meta_prompt}]},
-                    config=types.GenerateContentConfig(
-                        response_modalities=["TEXT"],
-                        max_output_tokens=256,  # Reduced to prevent MAX_TOKENS errors
-                        temperature=0.7
-                    )
-                )
-                
-                print(f"📦 Enhancement response type: {type(enhancement_response)}")
-                print(f"📦 Has candidates: {hasattr(enhancement_response, 'candidates') and bool(enhancement_response.candidates)}")
-                
-                if hasattr(enhancement_response, 'candidates') and enhancement_response.candidates:
-                    first_candidate = enhancement_response.candidates[0]
-                    print(f"📦 First candidate: {first_candidate}")
-
-                    # Check for MAX_TOKENS finish reason
-                    if hasattr(first_candidate, 'finish_reason') and first_candidate.finish_reason:
-                        print(f"📦 Finish reason: {first_candidate.finish_reason}")
-                        if str(first_candidate.finish_reason) == 'MAX_TOKENS':
-                            enhanced_prompt = request.prompt
-                            print(f"⚠️ Enhancement hit MAX_TOKENS limit, using original prompt")
-                            # Continue to image generation with original prompt
-                        else:
-                            # Process the response normally
-                            if hasattr(first_candidate, 'content') and first_candidate.content:
-                                print(f"📦 Content: {first_candidate.content}")
-                                if hasattr(first_candidate.content, 'parts') and first_candidate.content.parts:
-                                    print(f"📦 Parts count: {len(first_candidate.content.parts)}")
-                                    if first_candidate.content.parts[0].text:
-                                        enhanced_prompt = first_candidate.content.parts[0].text.strip()
-                                        print(f"✅ Enhanced Prompt: {enhanced_prompt}")
-                                    else:
-                                        enhanced_prompt = request.prompt
-                                        print(f"⚠️ Enhancement failed - no text in first part, using original prompt")
-                                else:
-                                    enhanced_prompt = request.prompt
-                                    print(f"⚠️ Enhancement failed - no parts in content, using original prompt")
-                            else:
-                                enhanced_prompt = request.prompt
-                                print(f"⚠️ Enhancement failed - no content in candidate, using original prompt")
-                    else:
-                        # No finish_reason, try to get content
-                        if hasattr(first_candidate, 'content') and first_candidate.content:
-                            print(f"📦 Content: {first_candidate.content}")
-                            if hasattr(first_candidate.content, 'parts') and first_candidate.content.parts:
-                                print(f"📦 Parts count: {len(first_candidate.content.parts)}")
-                                if first_candidate.content.parts[0].text:
-                                    enhanced_prompt = first_candidate.content.parts[0].text.strip()
-                                    print(f"✅ Enhanced Prompt: {enhanced_prompt}")
-                                else:
-                                    enhanced_prompt = request.prompt
-                                    print(f"⚠️ Enhancement failed - no text in first part, using original prompt")
-                            else:
-                                enhanced_prompt = request.prompt
-                                print(f"⚠️ Enhancement failed - no parts in content, using original prompt")
-                        else:
-                            enhanced_prompt = request.prompt
-                            print(f"⚠️ Enhancement failed - no content in candidate, using original prompt")
-                else:
-                    enhanced_prompt = request.prompt
-                    print(f"⚠️ Enhancement failed - no candidates in response, using original prompt")
-                    
-            except Exception as enhancement_error:
-                enhanced_prompt = request.prompt
-                print(f"❌ Enhancement error: {str(enhancement_error)}")
-                print(f"⚠️ Using original prompt due to error: {enhanced_prompt}")
-                import traceback
-                traceback.print_exc()
+            # Step 1: SKIP Intelligent prompt optimization to ensure strict prompt adherence
+            # The user reported that details were being lost/changed. Passing the prompt directly
+            # fixes this issue.
+            print(f"⏩ Skipping prompt enhancement to ensure strict adherence to user prompt")
+            enhanced_prompt = request.prompt
             
             print("Step 2: Generating image with enhanced prompt...")
 
@@ -279,12 +188,10 @@ Enhanced prompt:"""
             # Gemini 2.5 Flash Image requires "aspect ratio is" followed by the ratio value
             final_prompt = f"""{enhanced_prompt}
 
-aspect ratio is {request.aspect_ratio}
-
 Technical Specifications:
 - Use {aspect_info['cinematic']} framing
 - Photorealistic, highly detailed, professional quality
-- 8K resolution, sharp focus, perfect lighting
+- Sharp focus, perfect lighting
 
 Output: Return ONLY the final generated image. Do not return text."""
 
@@ -462,13 +369,10 @@ async def edit_image(
 
 User Request: "{prompt}"
 
-aspect ratio is {aspect_ratio}
-
 Editing Guidelines:
 - Apply the requested edit to the image while maintaining photorealism
 - Keep the overall composition and style consistent
 - Make the edit blend seamlessly with the rest of the image
-- Generate the edited image in the specified aspect ratio
 
 Output: Return ONLY the final edited image. Do not return text."""
 
