@@ -209,7 +209,7 @@ Output: Return ONLY the final generated image. Do not return text."""
                     image_config=types.ImageConfig(
                         aspect_ratio=request.aspect_ratio,
                         image_size=request.output_resolution,
-                        person_generation="allow_adult"
+                        # person_generation="ALLOW_ADULT"  # May only be supported with Vertex AI projects
                     )
                 )
             )
@@ -409,7 +409,7 @@ Output: Return ONLY the final edited image. Do not return text."""
                 image_config=types.ImageConfig(
                     aspect_ratio=aspect_ratio,
                     image_size=output_resolution,
-                    person_generation="allow_adult"
+                    # person_generation="ALLOW_ADULT"  # May only be supported with Vertex AI projects
                 )
             )
         )
@@ -517,7 +517,7 @@ Output: Return ONLY the final composed image. Do not return text."""
                 image_config=types.ImageConfig(
                     aspect_ratio=aspect_ratio,
                     image_size=output_resolution,
-                    person_generation="allow_adult"
+                    # person_generation="ALLOW_ADULT"  # May only be supported with Vertex AI projects
                 )
             )
         )
