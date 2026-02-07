@@ -208,7 +208,8 @@ Output: Return ONLY the final generated image. Do not return text."""
                     response_modalities=["IMAGE", "TEXT"],
                     image_config=types.ImageConfig(
                         aspect_ratio=request.aspect_ratio,
-                        image_size=request.output_resolution
+                        image_size=request.output_resolution,
+                        person_generation="allow_adult"
                     )
                 )
             )
@@ -407,7 +408,8 @@ Output: Return ONLY the final edited image. Do not return text."""
                 response_modalities=["IMAGE", "TEXT"],
                 image_config=types.ImageConfig(
                     aspect_ratio=aspect_ratio,
-                    image_size=output_resolution
+                    image_size=output_resolution,
+                    person_generation="allow_adult"
                 )
             )
         )
@@ -514,7 +516,8 @@ Output: Return ONLY the final composed image. Do not return text."""
                 response_modalities=["IMAGE", "TEXT"],
                 image_config=types.ImageConfig(
                     aspect_ratio=aspect_ratio,
-                    image_size=output_resolution
+                    image_size=output_resolution,
+                    person_generation="allow_adult"
                 )
             )
         )
