@@ -5,7 +5,7 @@ This document is the authoritative source for security policy, architecture, and
 ## 1. Project Overview
 
 *   **Name**: GemFlash
-*   **Description**: A containerized web application that uses the Google Gemini 2.5 Flash Image API to generate and edit images.
+*   **Description**: A containerized web application that uses the Google Gemini 3.1 Flash Image API to generate and edit images.
 *   **Primary Language/Stack**: React (JavaScript), Python (FastAPI assumed), Docker.
 *   **Source Control**: [e.g., git@github.com:example-org/gemflash.git]
 

@@ -95,7 +95,7 @@ export function AIParameterControls({
             Gemini AI Parameters
           </CardTitle>
           <CardDescription>
-            Fine-tune the Gemini 2.5 Flash model parameters for optimal results
+            Fine-tune the Gemini 3.1 Flash Image model parameters for optimal results
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

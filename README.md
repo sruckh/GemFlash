@@ -27,7 +27,7 @@ Combine multiple images into new, cohesive compositions. Upload several images a
 
 ## Core Features
 
-- **Gemini 3 Integration**: Uses `gemini-3-pro-image-preview` for state-of-the-art image generation and editing
+- **Gemini 3 Integration**: Uses `gemini-3.1-flash-image-preview` for state-of-the-art image generation and editing
 - **Intelligent Prompt Enhancement**: Automatic optimization of prompts before generation
 - **Flexible Configuration**: Customizable aspect ratios and output resolutions
 - **Multimodal Support**: Handles text-to-image, image-to-image, and multi-image composition
@@ -55,7 +55,7 @@ Combine multiple images into new, cohesive compositions. Upload several images a
 - **Python 3**: Latest stable Python runtime
 
 ### Model
-- **gemini-3-pro-image-preview**: Latest Gemini 3 model for image generation and editing
+- **gemini-3.1-flash-image-preview**: Latest Gemini 3 model for image generation and editing
 
 ### DevOps
 - **Docker**: Containerization with multi-stage builds
@@ -99,7 +99,7 @@ cp .env.example .env
 |----------|----------|-------------|
 | `GOOGLE_API_KEY` | Yes | Your Google Gemini API key |
 | `GEMINI_API_KEY` | Alternative | Alternative variable name for API key |
-| `GEMINI_MODEL` | No | Model name (default: `gemini-3-pro-image-preview`) |
+| `GEMINI_MODEL` | No | Model name (default: `gemini-3.1-flash-image-preview`) |
 | `NODE_ENV` | No | Node environment (default: `development`) |
 | `PORT` | No | Backend port (default: `8000`) |
 | `NETWORK_NAME` | No | Docker network name (default: `shared_net`) |
@@ -109,7 +109,7 @@ Example `.env` file:
 ```env
 # Google Gemini API Configuration
 GOOGLE_API_KEY="your_actual_api_key_here"
-GEMINI_MODEL="gemini-3-pro-image-preview"
+GEMINI_MODEL="gemini-3.1-flash-image-preview"
 
 # Application Configuration
 NODE_ENV="development"
@@ -429,7 +429,7 @@ This project is developed following enterprise security standards and is intende
 
 ### Recent Updates
 
-- **Gemini 3 Migration**: Upgraded from Gemini 2.5 Flash to `gemini-3-pro-image-preview`
+- **Gemini 3 Migration**: Upgraded from Gemini 2.5 Flash to `gemini-3.1-flash-image-preview`
 - **Timeout Configuration**: Extended read timeout to 120 seconds for long-running generation
 - **Edit Tab UI**: Improved layout with better image preview and settings organization
 - **Compose Tab**: Added support for multi-image composition

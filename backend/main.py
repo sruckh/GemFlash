@@ -27,7 +27,7 @@ if not api_key:
     raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY environment variable is required")
 
 # Get model name from environment, with fallback to default
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3-pro-image-preview")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-image-preview")
 
 # Create client with extended timeout for image generation (120 seconds)
 # Pass timeout to httpx client via client_args in http_options
@@ -114,7 +114,7 @@ async def generate_image(request: ImageGenerationRequest):
         print(f"Generating image with prompt: {request.prompt}, aspect_ratio: {request.aspect_ratio}")
         
         try:
-            print("Step 1: Enhancing user prompt with Gemini 2.5 Flash...")
+            print("Step 1: Enhancing user prompt with Gemini 3.1 Flash Image...")
             
             # Map aspect ratios to composition hints and descriptions
             aspect_ratio_info = {
@@ -185,7 +185,7 @@ async def generate_image(request: ImageGenerationRequest):
             print("Step 2: Generating image with enhanced prompt...")
 
             # Step 2: Generate image with enhanced prompt
-            # Gemini 2.5 Flash Image requires "aspect ratio is" followed by the ratio value
+            # Gemini 3.1 Flash Image Image requires "aspect ratio is" followed by the ratio value
             final_prompt = f"""{enhanced_prompt}
 
 Technical Specifications:
