@@ -1,12 +1,18 @@
 # Component Documentation: Google Gemini API Integration
 
-This document outlines the purpose, security considerations, and operational guidelines for the integration with the Google Gemini 3.1 Flash Image API. All practices must align with the master security policy in `CONDUCTOR.md`.
+This document outlines the purpose, security considerations, and operational guidelines for the integration with current Google Gemini image models. All practices must align with the master security policy in `CONDUCTOR.md`.
 
 ## 1. Overview
 
 *   **Purpose**: The Google Gemini API is used for AI-powered image generation and editing, which is the core function of the GemFlash application.
 *   **Owner**: `@team-backend`
 *   **Contact**: `backend-support@example.com`
+
+## Supported Models
+
+*   **Nano Banana 2**: `gemini-3.1-flash-image`
+*   **Nano Banana Pro**: `gemini-3-pro-image`
+*   **Gemini Flash**: `gemini-flash-latest`
 
 ## 2. Data Flow and Handling
 

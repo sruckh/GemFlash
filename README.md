@@ -1,11 +1,11 @@
 # GemFlash - Gemini-Powered Image Generation & Editing
 
-A modern web application that leverages Google Gemini 3 to generate, edit, and compose images with an intuitive React frontend and FastAPI backend.
+A modern web application that leverages current Google Gemini image models to generate, edit, and compose images with an intuitive React frontend and FastAPI backend.
 
 ## Features
 
 ### Generate Tab
-Create images from text prompts using the power of Gemini 3. The application includes an intelligent prompt enhancement system that:
+Create images from text prompts using the power of Nano Banana 2. The application includes an intelligent prompt enhancement system that:
 - Optimizes simple prompts by adding visual details and photographic elements
 - Summarizes and refines overly complex prompts for better results
 - Adds aspect ratio-specific composition hints for better control
@@ -27,7 +27,7 @@ Combine multiple images into new, cohesive compositions. Upload several images a
 
 ## Core Features
 
-- **Gemini 3 Integration**: Uses `gemini-3.1-flash-image-preview` for state-of-the-art image generation and editing
+- **Current Gemini Model IDs**: Uses `gemini-3.1-flash-image` for Nano Banana 2 image generation and editing
 - **Intelligent Prompt Enhancement**: Automatic optimization of prompts before generation
 - **Flexible Configuration**: Customizable aspect ratios and output resolutions
 - **Multimodal Support**: Handles text-to-image, image-to-image, and multi-image composition
@@ -54,8 +54,10 @@ Combine multiple images into new, cohesive compositions. Upload several images a
 - **HTTPx**: HTTP client with extended timeout support for long-running operations
 - **Python 3**: Latest stable Python runtime
 
-### Model
-- **gemini-3.1-flash-image-preview**: Latest Gemini 3 model for image generation and editing
+### Models
+- **Nano Banana 2**: `gemini-3.1-flash-image`
+- **Nano Banana Pro**: `gemini-3-pro-image`
+- **Gemini Flash**: `gemini-flash-latest`
 
 ### DevOps
 - **Docker**: Containerization with multi-stage builds
@@ -99,7 +101,7 @@ cp .env.example .env
 |----------|----------|-------------|
 | `GOOGLE_API_KEY` | Yes | Your Google Gemini API key |
 | `GEMINI_API_KEY` | Alternative | Alternative variable name for API key |
-| `GEMINI_MODEL` | No | Model name (default: `gemini-3.1-flash-image-preview`) |
+| `GEMINI_MODEL` | No | Model name (default: `gemini-3.1-flash-image`) |
 | `NODE_ENV` | No | Node environment (default: `development`) |
 | `PORT` | No | Backend port (default: `8000`) |
 | `NETWORK_NAME` | No | Docker network name (default: `shared_net`) |
@@ -109,7 +111,7 @@ Example `.env` file:
 ```env
 # Google Gemini API Configuration
 GOOGLE_API_KEY="your_actual_api_key_here"
-GEMINI_MODEL="gemini-3.1-flash-image-preview"
+GEMINI_MODEL="gemini-3.1-flash-image"
 
 # Application Configuration
 NODE_ENV="development"
@@ -429,7 +431,7 @@ This project is developed following enterprise security standards and is intende
 
 ### Recent Updates
 
-- **Gemini 3 Migration**: Upgraded from Gemini 2.5 Flash to `gemini-3.1-flash-image-preview`
+- **Gemini Model Refresh**: Updated model IDs to Nano Banana 2 `gemini-3.1-flash-image`, Nano Banana Pro `gemini-3-pro-image`, and Gemini Flash `gemini-flash-latest`
 - **Timeout Configuration**: Extended read timeout to 120 seconds for long-running generation
 - **Edit Tab UI**: Improved layout with better image preview and settings organization
 - **Compose Tab**: Added support for multi-image composition
