@@ -1,34 +1,44 @@
-This memory documents the setup and development of the GemFlash project.
+# GemFlash Project Summary
 
-**Project Goal:** To create a containerized web application for AI image generation and editing using the Google Gemini 2.5 Flash Image API.
+## Purpose
+Containerized web application for AI image generation and editing using Google Gemini image models.
 
-**Technology Stack:**
-*   **Frontend:** React, Tailwind CSS, shadcn/ui, Vite
-*   **Backend:** Python, FastAPI, Uvicorn, Gunicorn
-*   **Containerization:** Docker, Docker Compose
+## Technology Stack
+- **Frontend:** React, Tailwind CSS, shadcn/ui, Vite
+- **Backend:** Python, FastAPI, Uvicorn, Gunicorn
+- **AI:** Google GenAI SDK (`google-genai` Python package)
+- **Containerization:** Docker, Docker Compose
 
-**Key Implementation Steps:**
+## Current Model Configuration
+- **Default Model**: `gemini-3.1-flash-image` (Nano Banana 2)
+- **Available Models** (set via `GEMINI_MODEL` env var):
+  - `gemini-3.1-flash-image` — Nano Banana 2 (default)
+  - `gemini-3-pro-image` — Nano Banana Pro
+  - `gemini-flash-latest` — Gemini Flash
+- **API Key**: `GOOGLE_API_KEY` or `GEMINI_API_KEY` env var
 
-1.  **Documentation:**
-    *   Created and updated `CONDUCTOR.md` for security policies.
-    *   Created `GEMINI.md` to document the Google Gemini API integration.
-    *   Updated `ARCHITECTURE.md` with a system diagram and data flow.
-    *   Updated `BUILD.md` with build and deployment instructions.
-    *   Maintained a development log in `JOURNAL.md`.
-    *   Created a `README.md` with final instructions.
+## Project Structure
+- `backend/main.py` — FastAPI server, all API endpoints
+- `frontend/src/App.jsx` — Main React application (single-file)
+- `frontend/src/components/` — Reusable components (EnhancedImageCard, AIParameterControls, etc.)
+- `frontend/vite.config.js` — Vite config with `@` path alias
+- `Dockerfile` — Multi-stage production build
+- `docker-compose.yml` — Local development
 
-2.  **Project Structure:**
-    *   Set up a monorepo-style structure with separate `frontend` and `backend` directories.
-    *   Configured `Dockerfile` for a multi-stage build to create a production-ready image.
-    *   Created `docker-compose.yml` for easy local development.
+## Features
+- **Generate Tab**: Text-to-image generation with prompt enhancement
+- **Edit Tab**: Upload image + prompt for AI editing
+- **Compose Tab**: Combine multiple images into new compositions
+- **Image Reuse**: Send images between tabs (Edit → Compose → Edit)
+- **Aspect Ratios**: 10 supported ratios (1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9)
 
-3.  **Features:**
-    *   **Favicon Generation:** The `Dockerfile` automatically generates a `favicon.ico` from a source image using ImageMagick.
-    *   **Image Generation:** Users can enter a text prompt to generate an image.
-    *   **Image Editing:** Users can upload an image and provide a prompt to edit it.
-    *   **API Integration:** The backend securely communicates with the Google Gemini API using an API key managed through an environment file.
+## How to Run
+1. Add `GOOGLE_API_KEY` to `.env` file
+2. `docker compose build`
+3. `docker compose up`
 
-**How to Run:**
-1.  Add the `GOOGLE_API_KEY` to the `.gemini/.env` file.
-2.  Build the application with `docker-compose build`.
-3.  Run the application with `docker-compose up`.
+## Key Files
+- `CLAUDE.md` — Claude Code configuration
+- `CONDUCTOR.md` — Security policies
+- `GEMINI.md` — Gemini API integration docs
+- `.serena/project.yml` — Serena project config
