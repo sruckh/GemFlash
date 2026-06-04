@@ -5,11 +5,10 @@ A modern web application that leverages current Google Gemini image models to ge
 ## Features
 
 ### Generate Tab
-Create images from text prompts using the power of Nano Banana 2. The application includes an intelligent prompt enhancement system that:
-- Optimizes simple prompts by adding visual details and photographic elements
-- Summarizes and refines overly complex prompts for better results
-- Adds aspect ratio-specific composition hints for better control
-- Supports multiple aspect ratios and output resolutions
+Create images from text prompts using the power of Nano Banana 2. Prompts are passed directly to the Gemini API for strict adherence to user input:
+- Supports 10 aspect ratios and 3 output resolutions
+- Aspect ratio-specific composition hints added for better control
+- Choose from PNG, JPEG, or WebP output formats
 
 ### Edit Tab
 Modify existing images with AI-powered edits. Upload images via drag-and-drop or URL, then:
@@ -28,7 +27,7 @@ Combine multiple images into new, cohesive compositions. Upload several images a
 ## Core Features
 
 - **Current Gemini Model IDs**: Uses `gemini-3.1-flash-image` for Nano Banana 2 image generation and editing
-- **Intelligent Prompt Enhancement**: Automatic optimization of prompts before generation
+- **Strict Prompt Adherence**: User prompts are passed directly to the API without modification
 - **Flexible Configuration**: Customizable aspect ratios and output resolutions
 - **Multimodal Support**: Handles text-to-image, image-to-image, and multi-image composition
 - **Modern UI**: Built with React 18, Shadcn/ui components, and Tailwind CSS
@@ -182,22 +181,23 @@ The application supports the following aspect ratios:
 | Ratio | Format | Use Case |
 |-------|--------|----------|
 | `1:1` | Square (1024×1024) | Profile pictures, social media tiles |
-| `16:9` | Widescreen (1344×768) | Cinematic shots, landscape scenes |
-| `9:16` | Portrait (768×1344) | Mobile content, portrait photography |
+| `2:3` | Portrait (832×1248) | Photography, print/poster |
+| `3:2` | Landscape (1248×832) | Photography |
+| `3:4` | Portrait Classic (864×1184) | Social media, print |
 | `4:3` | Classic (1184×864) | Traditional photography |
-| `3:4` | Portrait Classic (864×1184) | Vertical layouts |
 | `4:5` | Instagram Portrait (896×1152) | Social media vertical |
 | `5:4` | Landscape (1152×896) | Horizontal wide shots |
+| `9:16` | Portrait (768×1344) | Mobile video (Reels/Shorts) |
+| `16:9` | Widescreen (1344×768) | Widescreen video, web |
 | `21:9` | Ultrawide (1536×672) | Cinematic ultra-wide |
 
 ### Output Resolutions
 
 Choose from the following resolution options:
 
-- **1K**: Standard quality, faster generation
-- **2K**: High quality, balanced performance
-- **4K**: Very high quality, detailed output
-- **8K**: Maximum quality, longest generation time
+- **1K**: Standard quality (~1024×1024), faster generation
+- **2K**: High quality (~2048×2048), balanced performance
+- **4K**: Ultra-high quality (~3840×2160+), detailed output
 
 ## API Endpoints
 
@@ -432,10 +432,11 @@ This project is developed following enterprise security standards and is intende
 ### Recent Updates
 
 - **Gemini Model Refresh**: Updated model IDs to Nano Banana 2 `gemini-3.1-flash-image`, Nano Banana Pro `gemini-3-pro-image`, and Gemini Flash `gemini-flash-latest`
+- **Strict Prompt Adherence**: Disabled prompt enhancement so user input is passed directly to the API
 - **Timeout Configuration**: Extended read timeout to 120 seconds for long-running generation
 - **Edit Tab UI**: Improved layout with better image preview and settings organization
 - **Compose Tab**: Added support for multi-image composition
-- **Prompt Enhancement**: Intelligent system that optimizes prompts before generation
+- **Path Alias Fix**: Resolved jsconfig.json/vite.config.js `@` alias inconsistency
 
 ### Version History
 
