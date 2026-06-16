@@ -20,6 +20,9 @@ import { ProcessingProgress } from "./components/ProcessingProgress";
 import { EnhancedImageUpload } from "./components/EnhancedImageUpload";
 
 function App() {
+  // Provider state
+  const [provider, setProvider] = useState("nano_banana")
+
   // Tab state
   const [activeTab, setActiveTab] = useState("generate")
   
@@ -120,6 +123,11 @@ function App() {
     { value: "webp", label: "WebP - Modern" },
   ]
 
+  const providers = [
+    { value: "nano_banana", label: "Nano Banana 2" },
+    { value: "gpt_image_2", label: "GPT Image 2" },
+  ]
+
   // Generate image handler
   const handleGenerateImage = async () => {
     if (!generatePrompt.trim()) {
@@ -145,11 +153,10 @@ function App() {
     }, 500)
     
     try {
-      const response = await fetch('/api/generate_image', {
+      const endpoint = provider === 'gpt_image_2' ? '/api/fal/generate_image' : '/api/generate_image'
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: generatePrompt,
           aspect_ratio: generateAspectRatio,
@@ -164,10 +171,28 @@ function App() {
       
       if (data.error) {
         toast.error(data.error)
-      } else if (data.image) {
+      } else if (data.image_url) {
+        // Fal.AI returns a hosted URL
         const newImage = {
           id: Date.now(),
-          src: `data:image/png;base64,${data.image}`,
+          src: data.image_url,
+          imageType: 'url',
+          prompt: generatePrompt,
+          aspect_ratio: generateAspectRatio,
+          resolution: generateResolution,
+          type: 'generated',
+          timestamp: new Date()
+        }
+        setGeneratedImages(prev => [newImage, ...prev])
+        setGeneratePrompt("")
+        toast.success("Image generated successfully!")
+      } else if (data.image) {
+        // Nano Banana returns base64 with actual mime type
+        const mimeType = data.mime_type || 'image/png'
+        const newImage = {
+          id: Date.now(),
+          src: `data:${mimeType};base64,${data.image}`,
+          imageType: 'base64',
           prompt: generatePrompt,
           aspect_ratio: generateAspectRatio,
           resolution: generateResolution,
@@ -224,21 +249,33 @@ function App() {
       formData.append('aspect_ratio', editAspectRatio)
       formData.append('output_resolution', editResolution)
       formData.append('output_format', editOutputFormat)
-      
-      // Use selected image if available
-      if (selectedImageForEdit && editImage) {
-        formData.append('image_file', editImage)
-      } else if (editImageUrl.trim()) {
-        formData.append('image_urls', editImageUrl)
-      } else if (editImage) {
-        formData.append('image_file', editImage)
+
+      let endpoint
+      if (provider === 'gpt_image_2') {
+        endpoint = '/api/fal/edit_image'
+        // Fal.AI accepts URL directly or file upload
+        const srcToUse = selectedImageForEdit?.src || editImageUrl.trim()
+        if (srcToUse && (srcToUse.startsWith('https://') || srcToUse.startsWith('http://'))) {
+          formData.append('image_url', srcToUse)
+        } else if (srcToUse && srcToUse.startsWith('data:')) {
+          formData.append('image_url', srcToUse)
+        } else if (editImage) {
+          formData.append('image_file', editImage)
+        } else if (editImageUrl.trim()) {
+          formData.append('image_url', editImageUrl.trim())
+        }
+      } else {
+        endpoint = '/api/edit_image'
+        if (selectedImageForEdit && editImage) {
+          formData.append('image_file', editImage)
+        } else if (editImageUrl.trim()) {
+          formData.append('image_urls', editImageUrl)
+        } else if (editImage) {
+          formData.append('image_file', editImage)
+        }
       }
       
-      const response = await fetch('/api/edit_image', {
-        method: 'POST',
-        body: formData,
-      })
-      
+      const response = await fetch(endpoint, { method: 'POST', body: formData })
       const data = await response.json()
       clearInterval(progressInterval)
       setProcessingProgress(100)
@@ -249,25 +286,43 @@ function App() {
       
       if (data.error) {
         toast.error(data.error)
-      } else if (data.image) {
+      } else if (data.image_url) {
+        // Fal.AI result
         const newImage = {
           id: Date.now(),
-          src: `data:image/png;base64,${data.image}`,
+          src: data.image_url,
+          imageType: 'url',
           prompt: editPrompt,
           type: 'edited',
           originalImage: selectedImageForEdit,
           timestamp: new Date()
         }
         setEditedImages(prev => [newImage, ...prev])
-        // Select the newly edited image for potential further editing
+        setSelectedImageForEdit(newImage)
+        setEditImage(null)
+        setEditImageUrl(data.image_url)
+        setEditPrompt("")
+        toast.success("Image edited successfully!")
+      } else if (data.image) {
+        // Nano Banana result
+        const mimeType = data.mime_type || 'image/png'
+        const newImage = {
+          id: Date.now(),
+          src: `data:${mimeType};base64,${data.image}`,
+          imageType: 'base64',
+          prompt: editPrompt,
+          type: 'edited',
+          originalImage: selectedImageForEdit,
+          timestamp: new Date()
+        }
+        setEditedImages(prev => [newImage, ...prev])
         setSelectedImageForEdit(newImage)
         setEditPrompt("")
         toast.success("Image edited successfully!")
-        // Convert new image to file for next edit
-        fetch(`data:image/png;base64,${data.image}`)
+        fetch(`data:${mimeType};base64,${data.image}`)
           .then(res => res.blob())
           .then(blob => {
-            const file = new File([blob], 'edited-image.png', { type: 'image/png' })
+            const file = new File([blob], 'edited-image.png', { type: mimeType })
             setEditImage(file)
           })
       } else {
@@ -320,28 +375,58 @@ function App() {
       formData.append('output_resolution', composeResolution)
       formData.append('output_format', composeOutputFormat)
 
-      // Add selected images
-      selectedImages.forEach((img, index) => {
-        if (img.file) {
-          formData.append('image_files', img.file)
+      let endpoint
+      if (provider === 'gpt_image_2') {
+        endpoint = '/api/fal/compose_images'
+        // Separate URL images from file images
+        const imageUrls = []
+        selectedImages.forEach(img => {
+          if (img.src && (img.src.startsWith('https://') || img.src.startsWith('http://') || img.src.startsWith('data:'))) {
+            imageUrls.push(img.src)
+          } else if (img.file) {
+            formData.append('image_files', img.file)
+          }
+        })
+        if (imageUrls.length > 0) {
+          formData.append('image_urls', JSON.stringify(imageUrls))
         }
-      })
+      } else {
+        endpoint = '/api/compose_images'
+        selectedImages.forEach(img => {
+          if (img.file) {
+            formData.append('image_files', img.file)
+          }
+        })
+      }
       
-      const response = await fetch('/api/compose_images', {
-        method: 'POST',
-        body: formData,
-      })
-      
+      const response = await fetch(endpoint, { method: 'POST', body: formData })
       const data = await response.json()
       clearInterval(progressInterval)
       setProcessingProgress(100)
       
       if (data.error) {
         toast.error(data.error)
-      } else if (data.image) {
+      } else if (data.image_url) {
+        // Fal.AI result
         const newImage = {
           id: Date.now(),
-          src: `data:image/png;base64,${data.image}`,
+          src: data.image_url,
+          imageType: 'url',
+          prompt: composePrompt,
+          type: 'composed',
+          timestamp: new Date()
+        }
+        setComposedImages(prev => [newImage, ...prev])
+        setComposePrompt("")
+        setSelectedForCompose(new Set())
+        toast.success("Images composed successfully!")
+      } else if (data.image) {
+        // Nano Banana result
+        const mimeType = data.mime_type || 'image/png'
+        const newImage = {
+          id: Date.now(),
+          src: `data:${mimeType};base64,${data.image}`,
+          imageType: 'base64',
           prompt: composePrompt,
           type: 'composed',
           timestamp: new Date()
@@ -365,46 +450,59 @@ function App() {
   // Send image to edit tab
   const sendToEdit = (image) => {
     setActiveTab("edit")
-    // Add image to edit model cards and select it with full metadata
-    const editImage = {
+    const transferredImage = {
       id: Date.now(),
       src: image.src,
+      imageType: image.imageType || (image.src.startsWith('http') ? 'url' : 'base64'),
       prompt: image.prompt || '',
       type: 'transferred',
       timestamp: image.timestamp || new Date(),
       aspect_ratio: image.aspect_ratio || null,
       name: image.name || 'transferred-image'
     }
-    setEditModelImages(prev => [editImage, ...prev])
-    setSelectedImageForEdit(editImage)
-    // Also set as file for API call
-    fetch(image.src)
-      .then(res => res.blob())
-      .then(blob => {
-        const file = new File([blob], 'image.png', { type: 'image/png' })
-        setEditImage(file)
-      })
+    setEditModelImages(prev => [transferredImage, ...prev])
+    setSelectedImageForEdit(transferredImage)
+    if (image.src.startsWith('https://') || image.src.startsWith('http://')) {
+      // URL image — pass directly, no File conversion needed
+      setEditImage(null)
+      setEditImageUrl(image.src)
+    } else {
+      // data: / blob: — convert to File for Nano Banana
+      fetch(image.src)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'image.png', { type: 'image/png' })
+          setEditImage(file)
+          setEditImageUrl('')
+        })
+    }
   }
 
   // Send image to compose tab
   const sendToCompose = (image) => {
     setActiveTab("compose")
-    fetch(image.src)
-      .then(res => res.blob())
-      .then(blob => {
-        const file = new File([blob], 'image.png', { type: 'image/png' })
-        const newComposeImage = {
-          id: Date.now(),
-          src: image.src,
-          file: file,
-          name: image.name || `image-${Date.now()}.png`,
-          prompt: image.prompt || '',
-          type: image.type || 'transferred',
-          timestamp: image.timestamp || new Date(),
-          aspect_ratio: image.aspect_ratio || null
-        }
-        setComposeImages(prev => [newComposeImage, ...prev])
-      })
+    const newComposeImage = {
+      id: Date.now(),
+      src: image.src,
+      imageType: image.imageType || (image.src.startsWith('http') ? 'url' : 'base64'),
+      name: image.name || `image-${Date.now()}.png`,
+      prompt: image.prompt || '',
+      type: image.type || 'transferred',
+      timestamp: image.timestamp || new Date(),
+      aspect_ratio: image.aspect_ratio || null
+    }
+    if (image.src.startsWith('https://') || image.src.startsWith('http://')) {
+      // URL image — no file conversion needed; src is used directly for Fal.AI
+      setComposeImages(prev => [newComposeImage, ...prev])
+    } else {
+      fetch(image.src)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'image.png', { type: 'image/png' })
+          setComposeImages(prev => [{ ...newComposeImage, file }, ...prev])
+        })
+        .catch(() => setComposeImages(prev => [newComposeImage, ...prev]))
+    }
   }
 
   // Download image
@@ -417,33 +515,32 @@ function App() {
     document.body.removeChild(link)
   }
 
-  // Send image to edit tab
+  // Send image to edit tab (from compose results)
   const sendToEditTab = async (image) => {
     try {
-      // Convert base64 to blob
-      const response = await fetch(image.src)
-      const blob = await response.blob()
-
-      // Create a File object from the blob
-      const file = new File([blob], `composed-image-${image.id}.png`, { type: 'image/png' })
-
-      // Add to edit model images and select it with full metadata
       const newModelImage = {
         id: Date.now() + Math.random(),
         src: image.src,
+        imageType: image.imageType || (image.src.startsWith('http') ? 'url' : 'base64'),
         prompt: image.prompt || '',
         type: 'transferred',
         timestamp: image.timestamp || new Date(),
         aspect_ratio: image.aspect_ratio || null,
         name: image.name || `composed-image-${image.id}.png`
       }
-
-      // Set the edit file and add to model images
-      setEditImage(file)
-      setEditImageUrl("") // Clear URL field when transferring composed images
       setEditModelImages(prev => [newModelImage, ...prev])
       setSelectedImageForEdit(newModelImage)
       setActiveTab('edit')
+
+      if (image.src.startsWith('https://') || image.src.startsWith('http://')) {
+        setEditImage(null)
+        setEditImageUrl(image.src)
+      } else {
+        const blob = await fetch(image.src).then(r => r.blob())
+        const file = new File([blob], `composed-image-${image.id}.png`, { type: 'image/png' })
+        setEditImage(file)
+        setEditImageUrl('')
+      }
     } catch (error) {
       console.error('Error sending image to edit tab:', error)
     }
@@ -452,18 +549,10 @@ function App() {
   // Add image to composition selection
   const addToComposition = async (image) => {
     try {
-      // Convert base64 to blob
-      const response = await fetch(image.src)
-      const blob = await response.blob()
-
-      // Create a File object from the blob
-      const file = new File([blob], `composed-image-${image.id}.png`, { type: 'image/png' })
-
-      // Create image object for composition with full metadata
       const newImage = {
         id: Date.now() + Math.random(),
         src: image.src,
-        file: file,
+        imageType: image.imageType || (image.src.startsWith('http') ? 'url' : 'base64'),
         name: image.name || `composed-image-${image.id}.png`,
         prompt: image.prompt || '',
         type: image.type || 'transferred',
@@ -471,8 +560,13 @@ function App() {
         aspect_ratio: image.aspect_ratio || null
       }
 
-      // Add to composition images and switch to compose tab
-      setComposeImages(prev => [...prev, newImage])
+      if (image.src.startsWith('https://') || image.src.startsWith('http://')) {
+        setComposeImages(prev => [...prev, newImage])
+      } else {
+        const blob = await fetch(image.src).then(r => r.blob())
+        const file = new File([blob], newImage.name, { type: 'image/png' })
+        setComposeImages(prev => [...prev, { ...newImage, file }])
+      }
       setActiveTab('compose')
       toast.success("Image added to composition pool")
     } catch (error) {
@@ -546,13 +640,19 @@ function App() {
   // Select image for editing
   const selectImageForEdit = (image) => {
     setSelectedImageForEdit(image)
-    // Convert to file for API
-    fetch(image.src)
-      .then(res => res.blob())
-      .then(blob => {
-        const file = new File([blob], 'selected-image.png', { type: 'image/png' })
-        setEditImage(file)
-      })
+    if (image.src.startsWith('https://') || image.src.startsWith('http://')) {
+      // URL image — set URL directly, no File needed
+      setEditImage(null)
+      setEditImageUrl(image.src)
+    } else {
+      fetch(image.src)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], 'selected-image.png', { type: 'image/png' })
+          setEditImage(file)
+          setEditImageUrl('')
+        })
+    }
   }
 
   // Remove image from edit model cards
@@ -595,7 +695,28 @@ function App() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">GemFlash</h1>
-              <p className="text-sm text-muted-foreground">Powered by Nano Banana 2</p>
+              <p className="text-sm text-muted-foreground">
+                {provider === 'gpt_image_2' ? 'Powered by GPT Image 2' : 'Powered by Nano Banana 2'}
+              </p>
+            </div>
+            {/* Provider selector */}
+            <div className="ml-auto flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden sm:block">Provider:</span>
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                {providers.map(p => (
+                  <button
+                    key={p.value}
+                    onClick={() => setProvider(p.value)}
+                    className="px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap"
+                    style={{
+                      backgroundColor: provider === p.value ? '#ffc433' : 'transparent',
+                      color: provider === p.value ? '#6f0063' : undefined,
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -633,7 +754,7 @@ function App() {
                 <CardDescription>Create new images from text prompts</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`grid grid-cols-1 ${provider === 'gpt_image_2' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                   <div>
                     <Label htmlFor="generate-aspect-ratio">Aspect Ratio</Label>
                     <Select value={generateAspectRatio} onValueChange={setGenerateAspectRatio}>
@@ -664,21 +785,23 @@ function App() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="generate-output-format">Output Format</Label>
-                    <Select value={generateOutputFormat} onValueChange={setGenerateOutputFormat}>
-                      <SelectTrigger id="generate-output-format">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {outputFormats.map((format) => (
-                          <SelectItem key={format.value} value={format.value}>
-                            {format.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {provider === 'gpt_image_2' && (
+                    <div>
+                      <Label htmlFor="generate-output-format">Output Format</Label>
+                      <Select value={generateOutputFormat} onValueChange={setGenerateOutputFormat}>
+                        <SelectTrigger id="generate-output-format">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {outputFormats.map((format) => (
+                            <SelectItem key={format.value} value={format.value}>
+                              {format.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -762,7 +885,7 @@ function App() {
                 <CardDescription>Configure aspect ratio and resolution for edited images</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`grid grid-cols-1 ${provider === 'gpt_image_2' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                   <div>
                     <Label htmlFor="edit-aspect-ratio">Aspect Ratio</Label>
                     <Select value={editAspectRatio} onValueChange={setEditAspectRatio}>
@@ -793,21 +916,23 @@ function App() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="edit-output-format">Output Format</Label>
-                    <Select value={editOutputFormat} onValueChange={setEditOutputFormat}>
-                      <SelectTrigger id="edit-output-format">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {outputFormats.map((format) => (
-                          <SelectItem key={format.value} value={format.value}>
-                            {format.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {provider === 'gpt_image_2' && (
+                    <div>
+                      <Label htmlFor="edit-output-format">Output Format</Label>
+                      <Select value={editOutputFormat} onValueChange={setEditOutputFormat}>
+                        <SelectTrigger id="edit-output-format">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {outputFormats.map((format) => (
+                            <SelectItem key={format.value} value={format.value}>
+                              {format.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1074,7 +1199,7 @@ function App() {
                 <CardDescription>Configure aspect ratio and resolution for composed images</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className={`grid grid-cols-1 ${provider === 'gpt_image_2' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                   <div>
                     <Label htmlFor="compose-aspect-ratio">Aspect Ratio</Label>
                     <Select value={composeAspectRatio} onValueChange={setComposeAspectRatio}>
@@ -1105,21 +1230,23 @@ function App() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="compose-output-format">Output Format</Label>
-                    <Select value={composeOutputFormat} onValueChange={setComposeOutputFormat}>
-                      <SelectTrigger id="compose-output-format">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {outputFormats.map((format) => (
-                          <SelectItem key={format.value} value={format.value}>
-                            {format.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {provider === 'gpt_image_2' && (
+                    <div>
+                      <Label htmlFor="compose-output-format">Output Format</Label>
+                      <Select value={composeOutputFormat} onValueChange={setComposeOutputFormat}>
+                        <SelectTrigger id="compose-output-format">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {outputFormats.map((format) => (
+                            <SelectItem key={format.value} value={format.value}>
+                              {format.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -9,6 +9,7 @@ import os
 import base64
 import io
 import json
+import math
 import requests
 from typing import List, Optional
 
@@ -21,23 +22,19 @@ api = FastAPI()
 # Serve static files
 app.mount("/static", StaticFiles(directory="frontend/public"), name="static")
 
-# Configure Gemini API - Load from environment variables
+# ── Gemini / Nano Banana configuration ──────────────────────────────────────
 api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY environment variable is required")
 
-# Current Gemini model IDs.
 GEMINI_MODELS = {
     "nano_banana_2": "gemini-3.1-flash-image",
     "nano_banana_pro": "gemini-3-pro-image",
     "gemini_flash": "gemini-flash-latest",
 }
 
-# Get model name from environment, with fallback to the standard image model.
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", GEMINI_MODELS["nano_banana_2"])
 
-# Create client with extended timeout for image generation (120 seconds)
-# Pass timeout to httpx client via client_args in http_options
 client = genai.Client(
     api_key=api_key,
     http_options=types.HttpOptions(
@@ -45,12 +42,99 @@ client = genai.Client(
     )
 )
 
-# Models
+# ── Fal.AI configuration ─────────────────────────────────────────────────────
+FAL_KEY = os.environ.get("FAL_KEY", "")
+FAL_BASE_URL = "https://fal.run"
+FAL_STORAGE_URL = "https://storage.fal.ai/upload"
+
+# Aspect ratio numerators/denominators used to compute Fal.AI image sizes
+_ASPECT_RATIOS = {
+    "1:1": (1, 1),  "16:9": (16, 9), "9:16": (9, 16),
+    "4:3": (4, 3),  "3:4": (3, 4),   "3:2": (3, 2),
+    "2:3": (2, 3),  "4:5": (4, 5),   "5:4": (5, 4),
+    "21:9": (21, 9),
+}
+
+
+def compute_fal_image_size(aspect_ratio: str, resolution: str) -> dict:
+    """
+    Map an aspect ratio + resolution label to a valid Fal.AI {width, height}.
+
+    Fal.AI GPT-Image-2 constraints:
+      - Both dimensions must be multiples of 16
+      - Max edge: 3840 px
+      - Aspect ratio ≤ 3:1
+      - Total pixels: 655,360 – 8,294,400
+
+    Resolution targets mirror the Nano Banana naming convention:
+      1K ≈ 1M px, 2K ≈ 4M px, 4K ≈ 8.29M px (Fal.AI ceiling)
+    """
+    TARGET_PIXELS = {"1K": 1_048_576, "2K": 4_194_304, "4K": 8_294_400}
+    MAX_EDGE   = 3840
+    MIN_PIXELS = 655_360
+    MAX_PIXELS = 8_294_400
+
+    w_r, h_r = _ASPECT_RATIOS.get(aspect_ratio, (1, 1))
+    target = max(MIN_PIXELS, min(TARGET_PIXELS.get(resolution, 1_048_576), MAX_PIXELS))
+
+    # Ideal float dimensions
+    w_ideal = math.sqrt(target * w_r / h_r)
+    h_ideal = math.sqrt(target * h_r / w_r)
+
+    width  = max(16, round(w_ideal / 16) * 16)
+    height = max(16, round(h_ideal / 16) * 16)
+
+    # Clamp to max edge
+    if width > MAX_EDGE:
+        width  = MAX_EDGE
+        height = max(16, round(h_ideal * (MAX_EDGE / w_ideal) / 16) * 16)
+    if height > MAX_EDGE:
+        height = MAX_EDGE
+        width  = max(16, round(w_ideal * (MAX_EDGE / h_ideal) / 16) * 16)
+
+    # Enforce ≤ 3:1 aspect ratio
+    if width and height:
+        if width / height > 3.0:
+            height = max(16, (width // 3 // 16) * 16)
+        elif height / width > 3.0:
+            width  = max(16, (height // 3 // 16) * 16)
+
+    # Clamp total pixels
+    total = width * height
+    if total < MIN_PIXELS:
+        scale  = (MIN_PIXELS / total) ** 0.5
+        width  = max(16, math.ceil(width  * scale / 16) * 16)
+        height = max(16, math.ceil(height * scale / 16) * 16)
+    elif total > MAX_PIXELS:
+        scale  = (MAX_PIXELS / total) ** 0.5
+        width  = max(16, math.floor(width  * scale / 16) * 16)
+        height = max(16, math.floor(height * scale / 16) * 16)
+
+    return {"width": max(16, width), "height": max(16, height)}
+
+
+async def upload_to_fal_storage(image_bytes: bytes, content_type: str = "image/png") -> str:
+    """Upload raw image bytes to Fal.AI storage and return the hosted URL."""
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        resp = await http.post(
+            FAL_STORAGE_URL,
+            content=image_bytes,
+            headers={
+                "Authorization": f"Key {FAL_KEY}",
+                "Content-Type": content_type,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["url"]
+
+
+# ── Pydantic models ───────────────────────────────────────────────────────────
 class ImageGenerationRequest(BaseModel):
     prompt: str
     aspect_ratio: str = "1:1"
     output_resolution: str = "1K"
     output_format: str = "png"
+
 
 class ImageEditRequest(BaseModel):
     prompt: str
@@ -59,141 +143,61 @@ class ImageEditRequest(BaseModel):
     output_resolution: str = "1K"
     output_format: str = "png"
 
-# Utility function to process image data
+
+# ── Gemini response helper ────────────────────────────────────────────────────
 def process_image_response(response):
+    """Extract base64 image data and mime type from a Gemini response."""
     image_data = None
+    mime_type = "image/png"
     try:
-        print(f"Processing response: {type(response)}")
         if hasattr(response, 'candidates') and response.candidates:
-            print(f"Candidates found: {len(response.candidates)}")
             first_candidate = response.candidates[0]
             if hasattr(first_candidate, 'content') and first_candidate.content:
-                print(f"Content found: {type(first_candidate.content)}")
                 if hasattr(first_candidate.content, 'parts') and first_candidate.content.parts:
-                    print(f"Parts found: {len(first_candidate.content.parts)}")
-                    for i, part in enumerate(first_candidate.content.parts):
-                        print(f"Part {i}: {type(part)}")
-                        # Check for inline_data (new API format)
+                    for part in first_candidate.content.parts:
                         if hasattr(part, 'inline_data') and part.inline_data:
-                            print(f"Inline data found: {type(part.inline_data)}")
+                            if hasattr(part.inline_data, 'mime_type') and part.inline_data.mime_type:
+                                mime_type = part.inline_data.mime_type
                             if hasattr(part.inline_data, 'data'):
-                                # Convert binary data to base64 string
-                                raw_data = part.inline_data.data
-                                if isinstance(raw_data, bytes):
-                                    image_data = base64.b64encode(raw_data).decode('utf-8')
-                                else:
-                                    image_data = raw_data  # Already a string
-                                print(f"Image data extracted and encoded successfully")
+                                raw = part.inline_data.data
+                                image_data = base64.b64encode(raw).decode('utf-8') if isinstance(raw, bytes) else raw
                                 break
-                        # Also check for inlineData (alternative format)
                         elif hasattr(part, 'inlineData') and part.inlineData:
-                            print(f"InlineData found: {type(part.inlineData)}")
+                            if hasattr(part.inlineData, 'mime_type') and part.inlineData.mime_type:
+                                mime_type = part.inlineData.mime_type
                             if hasattr(part.inlineData, 'data'):
-                                # Convert binary data to base64 string
-                                raw_data = part.inlineData.data
-                                if isinstance(raw_data, bytes):
-                                    image_data = base64.b64encode(raw_data).decode('utf-8')
-                                else:
-                                    image_data = raw_data  # Already a string
-                                print(f"Image data extracted and encoded successfully")
+                                raw = part.inlineData.data
+                                image_data = base64.b64encode(raw).decode('utf-8') if isinstance(raw, bytes) else raw
                                 break
-                        else:
-                            print(f"Part {i} has no inline_data or inlineData")
-                else:
-                    print("No parts found in content")
-            else:
-                print("No content found in first candidate")
-        else:
-            print("No candidates found in response")
     except Exception as e:
-        print(f"Error in process_image_response: {str(e)}")
+        print(f"Error in process_image_response: {e}")
         import traceback
         traceback.print_exc()
-    return image_data
+    return image_data, mime_type
 
-# API routes will be handled before static file serving
-# The React app will be served by the StaticFiles mount above
 
-# Image generation endpoint
+# ═══════════════════════════════════════════════════════════════════════════════
+# Nano Banana (Gemini) endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
 @api.post("/generate_image")
 async def generate_image(request: ImageGenerationRequest):
     try:
-        print(f"Generating image with prompt: {request.prompt}, aspect_ratio: {request.aspect_ratio}")
-        
-        try:
-            print(f"Step 1: Preparing prompt for Gemini model {GEMINI_MODEL}...")
-            
-            # Map aspect ratios to composition hints and descriptions
-            aspect_ratio_info = {
-                "1:1": {
-                    "composition": "square",
-                    "description": "square format (1024×1024 pixels)",
-                    "cinematic": "centered square composition"
-                },
-                "2:3": {
-                    "composition": "portrait",
-                    "description": "portrait format (832×1248 pixels)",
-                    "cinematic": "vertical portrait composition"
-                },
-                "3:2": {
-                    "composition": "landscape",
-                    "description": "landscape format (1248×832 pixels)",
-                    "cinematic": "horizontal landscape composition"
-                },
-                "3:4": {
-                    "composition": "portrait",
-                    "description": "portrait format (864×1184 pixels)",
-                    "cinematic": "vertical portrait composition"
-                },
-                "4:3": {
-                    "composition": "landscape",
-                    "description": "landscape format (1184×864 pixels)",
-                    "cinematic": "classic landscape composition"
-                },
-                "4:5": {
-                    "composition": "portrait",
-                    "description": "portrait format (896×1152 pixels)",
-                    "cinematic": "vertical portrait composition"
-                },
-                "5:4": {
-                    "composition": "landscape",
-                    "description": "landscape format (1152×896 pixels)",
-                    "cinematic": "horizontal landscape composition"
-                },
-                "9:16": {
-                    "composition": "portrait",
-                    "description": "portrait format (768×1344 pixels)",
-                    "cinematic": "vertical portrait orientation"
-                },
-                "16:9": {
-                    "composition": "widescreen",
-                    "description": "widescreen landscape format (1344×768 pixels)",
-                    "cinematic": "cinematic widescreen shot"
-                },
-                "21:9": {
-                    "composition": "ultrawide",
-                    "description": "ultra-wide format (1536×672 pixels)",
-                    "cinematic": "cinematic ultra-wide shot"
-                }
-            }
-            
-            aspect_info = aspect_ratio_info.get(request.aspect_ratio, {
-                "composition": "square", 
-                "description": f"{request.aspect_ratio} aspect ratio",
-                "cinematic": f"{request.aspect_ratio} composition"
-            })
-            
-            # Step 1: SKIP Intelligent prompt optimization to ensure strict prompt adherence
-            # The user reported that details were being lost/changed. Passing the prompt directly
-            # fixes this issue.
-            print(f"⏩ Skipping prompt enhancement to ensure strict adherence to user prompt")
-            enhanced_prompt = request.prompt
-            
-            print("Step 2: Generating image with enhanced prompt...")
+        aspect_ratio_info = {
+            "1:1":  {"cinematic": "centered square composition"},
+            "2:3":  {"cinematic": "vertical portrait composition"},
+            "3:2":  {"cinematic": "horizontal landscape composition"},
+            "3:4":  {"cinematic": "vertical portrait composition"},
+            "4:3":  {"cinematic": "classic landscape composition"},
+            "4:5":  {"cinematic": "vertical portrait composition"},
+            "5:4":  {"cinematic": "horizontal landscape composition"},
+            "9:16": {"cinematic": "vertical portrait orientation"},
+            "16:9": {"cinematic": "cinematic widescreen shot"},
+            "21:9": {"cinematic": "cinematic ultra-wide shot"},
+        }
+        aspect_info = aspect_ratio_info.get(request.aspect_ratio, {"cinematic": f"{request.aspect_ratio} composition"})
 
-            # Step 2: Generate image with enhanced prompt
-            # Gemini image models use ImageConfig for aspect ratio and image size.
-            final_prompt = f"""{enhanced_prompt}
+        final_prompt = f"""{request.prompt}
 
 Technical Specifications:
 - Use {aspect_info['cinematic']} framing
@@ -202,101 +206,40 @@ Technical Specifications:
 
 Output: Return ONLY the final generated image. Do not return text."""
 
-            # Use generate_content with IMAGE response modality for Gemini models
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[types.Part.from_text(text=final_prompt)]
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE", "TEXT"],
-                    image_config=types.ImageConfig(
-                        aspect_ratio=request.aspect_ratio,
-                        image_size=request.output_resolution,
-                        # person_generation="ALLOW_ADULT"  # May only be supported with Vertex AI projects
-                    )
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=final_prompt)])],
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE", "TEXT"],
+                image_config=types.ImageConfig(
+                    aspect_ratio=request.aspect_ratio,
+                    image_size=request.output_resolution,
                 )
             )
-            print(f"client.models.generate_content completed successfully")
-        except Exception as e:
-            print(f"Error calling model.generate_content: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise e
-        
-        print(f"Response received: {type(response)}")
+        )
 
-        # Check for prompt feedback and safety ratings
-        if hasattr(response, 'prompt_feedback'):
-            print(f"⚠️ Prompt Feedback: {response.prompt_feedback}")
-            if hasattr(response.prompt_feedback, 'block_reason'):
-                print(f"🚫 Block Reason: {response.prompt_feedback.block_reason}")
-            if hasattr(response.prompt_feedback, 'safety_ratings'):
-                print(f"🛡️ Prompt Safety Ratings: {response.prompt_feedback.safety_ratings}")
+        image_data, mime_type = process_image_response(response)
 
-        if hasattr(response, 'candidates'):
-            print(f"Candidates: {response.candidates}")
-            if response.candidates:
-                print(f"First candidate: {response.candidates[0]}")
-
-                # Check safety ratings
-                if hasattr(response.candidates[0], 'safety_ratings'):
-                    print(f"🛡️ Candidate Safety Ratings: {response.candidates[0].safety_ratings}")
-
-                # Check finish reason
-                if hasattr(response.candidates[0], 'finish_reason'):
-                    print(f"🏁 Finish Reason: {response.candidates[0].finish_reason}")
-
-                if hasattr(response.candidates[0], 'content'):
-                    print(f"Content: {response.candidates[0].content}")
-                    if hasattr(response.candidates[0].content, 'parts'):
-                        print(f"Parts: {response.candidates[0].content.parts}")
-            else:
-                print(f"❌ No candidates in response - checking for block/safety issues")
-                print(f"📋 Full response: {response}")
-        
-        image_data = process_image_response(response)
-        print(f"Image data extracted: {image_data is not None}")
-        
         if image_data:
             return {
                 "message": "Image generated successfully",
                 "prompt": request.prompt,
                 "aspect_ratio": request.aspect_ratio,
-                "image": image_data
+                "image": image_data,
+                "mime_type": mime_type,
             }
-        else:
-            # Handle case where response might not have text attribute
-            response_text = "No response text available"
-            if hasattr(response, 'text') and response.text:
-                response_text = response.text
-            elif hasattr(response, '__dict__'):
-                # Try to get text from response attributes
-                response_text = str(response)
-                
-            return {
-                "message": "Image generation completed, but no image data found",
-                "prompt": request.prompt,
-                "aspect_ratio": request.aspect_ratio,
-                "response": response_text
-            }
-    except Exception as e:
-        print(f"Exception occurred: {str(e)}")
-        # Additional error handling to get more details
-        error_details = {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "request_prompt": request.prompt,
-            "request_aspect_ratio": request.aspect_ratio
+        return {
+            "message": "Image generation completed, but no image data found",
+            "prompt": request.prompt,
+            "aspect_ratio": request.aspect_ratio,
+            "response": str(response),
         }
-        if "text" in str(e).lower():
-            error_details["additional_info"] = "This error suggests an issue with text processing in the response"
-        return error_details
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "error_type": type(e).__name__}
 
-# Image editing endpoint
+
 @api.post("/edit_image")
 async def edit_image(
     prompt: str = Form(...),
@@ -307,72 +250,25 @@ async def edit_image(
     image_file: UploadFile = File(default=None)
 ):
     try:
-        print(f"Edit image request received:")
-        print(f"  Prompt: {prompt}")
-        print(f"  Aspect Ratio: {aspect_ratio}")
-        print(f"  Image URLs: {repr(image_urls)}")
-        print(f"  Image file: {image_file.filename if image_file else 'None'}")
-        
-        # Validate that we have at least one image source
         if not image_urls.strip() and (not image_file or not image_file.filename):
-            return {
-                "error": "No image provided. Please upload an image file or provide an image URL."
-            }
-        
-        # Prepare content parts using the working pixshop format
+            return {"error": "No image provided. Please upload an image file or provide an image URL."}
+
         parts = []
-        
-        # Add images from URLs first (like pixshop does)
+
         if image_urls.strip():
             try:
-                print(f"Processing image URL: {image_urls}")
-                image_response = requests.get(image_urls)
-                image_response.raise_for_status()
-                # Convert to base64 string for inline data
-                image_data = base64.b64encode(image_response.content).decode('utf-8')
-                parts.append({
-                    "inlineData": {
-                        "mimeType": "image/jpeg",
-                        "data": image_data
-                    }
-                })
-                print("Successfully added image from URL")
+                img_resp = requests.get(image_urls, timeout=30)
+                img_resp.raise_for_status()
+                image_data = base64.b64encode(img_resp.content).decode('utf-8')
+                parts.append({"inlineData": {"mimeType": "image/jpeg", "data": image_data}})
             except Exception as e:
-                print(f"Error processing image URL {image_urls}: {str(e)}")
-                return {
-                    "error": f"Failed to fetch image from URL: {str(e)}"
-                }
-        
-        # Add uploaded image
+                return {"error": f"Failed to fetch image from URL: {e}"}
+
         if image_file and image_file.filename:
             content = await image_file.read()
-            # Convert to base64 string for inline data
             image_data = base64.b64encode(content).decode('utf-8')
-            parts.append({
-                "inlineData": {
-                    "mimeType": image_file.content_type,
-                    "data": image_data
-                }
-            })
-            print(f"Successfully added uploaded image: {image_file.filename}")
-        
-        # Create detailed prompt with aspect ratio specification
-        # Map aspect ratios to expected pixel dimensions for user clarity
-        aspect_ratio_descriptions = {
-            "1:1": "square format (1024×1024 pixels)",
-            "2:3": "portrait format (832×1248 pixels)",
-            "3:2": "landscape format (1248×832 pixels)",
-            "3:4": "portrait format (864×1184 pixels)",
-            "4:3": "landscape format (1184×864 pixels)",
-            "4:5": "portrait format (896×1152 pixels)",
-            "5:4": "landscape format (1152×896 pixels)",
-            "9:16": "portrait format (768×1344 pixels)",
-            "16:9": "widescreen landscape format (1344×768 pixels)",
-            "21:9": "ultra-wide format (1536×672 pixels)"
-        }
+            parts.append({"inlineData": {"mimeType": image_file.content_type, "data": image_data}})
 
-        aspect_description = aspect_ratio_descriptions.get(aspect_ratio, f"{aspect_ratio} aspect ratio")
-        
         detailed_prompt = f"""You are an expert photo editor AI. Your task is to perform a natural edit on the provided image based on the user's request.
 
 User Request: "{prompt}"
@@ -384,80 +280,50 @@ Editing Guidelines:
 
 Output: Return ONLY the final edited image. Do not return text."""
 
-        # Add the detailed prompt as text part
         parts.append({"text": detailed_prompt})
 
-        print(f"Sending {len(parts)} parts to API: {len([p for p in parts if 'inlineData' in p])} image(s) + 1 text prompt")
-
-        # Use generate_content with multimodal input (images + text) for Gemini
-        # Convert parts to proper Content structure
         content_parts = []
         for part in parts:
             if "inlineData" in part:
                 content_parts.append(types.Part(
-                    inline_data=types.Blob(
-                        mime_type=part["inlineData"]["mimeType"],
-                        data=part["inlineData"]["data"]
-                    )
+                    inline_data=types.Blob(mime_type=part["inlineData"]["mimeType"], data=part["inlineData"]["data"])
                 ))
             elif "text" in part:
                 content_parts.append(types.Part.from_text(text=part["text"]))
 
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=content_parts
-                )
-            ],
+            contents=[types.Content(role="user", parts=content_parts)],
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
                 image_config=types.ImageConfig(
                     aspect_ratio=aspect_ratio,
                     image_size=output_resolution,
-                    # person_generation="ALLOW_ADULT"  # May only be supported with Vertex AI projects
                 )
             )
         )
 
-        image_data = process_image_response(response)
+        image_data, mime_type = process_image_response(response)
 
         if image_data:
             return {
                 "message": "Image edited successfully",
                 "prompt": prompt,
                 "aspect_ratio": aspect_ratio,
-                "image": image_data
+                "image": image_data,
+                "mime_type": mime_type,
             }
-        else:
-            # Handle case where response might not have text attribute
-            response_text = "No response text available"
-            if hasattr(response, 'text') and response.text:
-                response_text = response.text
-            elif hasattr(response, '__dict__'):
-                # Try to get text from response attributes
-                response_text = str(response)
-                
-            return {
-                "message": "Image editing completed, but no image data found",
-                "prompt": prompt,
-                "response": response_text
-            }
+        return {
+            "message": "Image editing completed, but no image data found",
+            "prompt": prompt,
+            "response": str(response),
+        }
     except Exception as e:
-        print(f"Exception in edit_image: {str(e)}")
         import traceback
         traceback.print_exc()
-        return {
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "prompt": prompt if 'prompt' in locals() else None,
-            "aspect_ratio": aspect_ratio if 'aspect_ratio' in locals() else None,
-            "has_image_file": image_file is not None and image_file.filename is not None,
-            "has_image_urls": bool(image_urls.strip()) if 'image_urls' in locals() else False
-        }
+        return {"error": str(e), "error_type": type(e).__name__}
 
-# Multiple image composition endpoint
+
 @api.post("/compose_images")
 async def compose_images(
     prompt: str = Form(...),
@@ -467,22 +333,14 @@ async def compose_images(
     image_files: List[UploadFile] = File(default=[])
 ):
     try:
-        # Prepare content parts using the working pixshop format
         parts = []
-        
-        # Add uploaded images first
+
         for image_file in image_files:
             if image_file.filename:
                 content = await image_file.read()
                 image_data = base64.b64encode(content).decode('utf-8')
-                parts.append({
-                    "inlineData": {
-                        "mimeType": image_file.content_type,
-                        "data": image_data
-                    }
-                })
-        
-        # Create detailed prompt for composition
+                parts.append({"inlineData": {"mimeType": image_file.content_type, "data": image_data}})
+
         detailed_prompt = f"""You are an expert photo editor AI. Your task is to compose the provided images into a single cohesive image based on the user's request.
 
 User Request: "{prompt}"
@@ -494,73 +352,229 @@ Composition Guidelines:
 
 Output: Return ONLY the final composed image. Do not return text."""
 
-        # Add the detailed prompt as text part
         parts.append({"text": detailed_prompt})
 
-        # Use generate_content with multimodal input for Gemini composition
-        # Convert parts to proper Content structure
         content_parts = []
         for part in parts:
             if "inlineData" in part:
                 content_parts.append(types.Part(
-                    inline_data=types.Blob(
-                        mime_type=part["inlineData"]["mimeType"],
-                        data=part["inlineData"]["data"]
-                    )
+                    inline_data=types.Blob(mime_type=part["inlineData"]["mimeType"], data=part["inlineData"]["data"])
                 ))
             elif "text" in part:
                 content_parts.append(types.Part.from_text(text=part["text"]))
 
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=content_parts
-                )
-            ],
+            contents=[types.Content(role="user", parts=content_parts)],
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
                 image_config=types.ImageConfig(
                     aspect_ratio=aspect_ratio,
                     image_size=output_resolution,
-                    # person_generation="ALLOW_ADULT"  # May only be supported with Vertex AI projects
                 )
             )
         )
 
-        image_data = process_image_response(response)
+        image_data, mime_type = process_image_response(response)
 
         if image_data:
             return {
                 "message": "Images composed successfully",
                 "prompt": prompt,
-                "image": image_data
+                "image": image_data,
+                "mime_type": mime_type,
             }
-        else:
-            # Handle case where response might not have text attribute
-            response_text = "No response text available"
-            if hasattr(response, 'text') and response.text:
-                response_text = response.text
-            elif hasattr(response, '__dict__'):
-                # Try to get text from response attributes
-                response_text = str(response)
-                
-            return {
-                "message": "Image composition completed, but no image data found",
-                "prompt": prompt,
-                "response": response_text
-            }
+        return {
+            "message": "Image composition completed, but no image data found",
+            "prompt": prompt,
+            "response": str(response),
+        }
     except Exception as e:
         return {"error": str(e)}
 
-# Download image endpoint
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fal.AI (GPT Image 2) endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@api.post("/fal/generate_image")
+async def fal_generate_image(request: ImageGenerationRequest):
+    if not FAL_KEY:
+        return {"error": "FAL_KEY environment variable is not configured"}
+    try:
+        image_size = compute_fal_image_size(request.aspect_ratio, request.output_resolution)
+        payload = {
+            "prompt": request.prompt,
+            "image_size": image_size,
+            "quality": "high",
+            "output_format": request.output_format,
+            "num_images": 1,
+        }
+        async with httpx.AsyncClient(timeout=120.0) as http:
+            resp = await http.post(
+                f"{FAL_BASE_URL}/openai/gpt-image-2",
+                json=payload,
+                headers={"Authorization": f"Key {FAL_KEY}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        images = data.get("images", [])
+        if not images:
+            return {"error": "No images returned from Fal.AI"}
+
+        return {
+            "message": "Image generated successfully",
+            "prompt": request.prompt,
+            "aspect_ratio": request.aspect_ratio,
+            "image_url": images[0]["url"],
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@api.post("/fal/edit_image")
+async def fal_edit_image(
+    prompt: str = Form(...),
+    aspect_ratio: str = Form(default="1:1"),
+    output_resolution: str = Form(default="1K"),
+    output_format: str = Form(default="png"),
+    image_url: str = Form(default=""),       # https:// URL or data: URI
+    image_file: UploadFile = File(default=None)
+):
+    if not FAL_KEY:
+        return {"error": "FAL_KEY environment variable is not configured"}
+    try:
+        fal_url = None
+
+        if image_url.strip():
+            if image_url.startswith("data:"):
+                # Decode base64 data URI and upload to Fal.AI storage
+                header, b64data = image_url.split(",", 1)
+                content_type = header.split(";")[0].split(":")[1]
+                image_bytes = base64.b64decode(b64data)
+                fal_url = await upload_to_fal_storage(image_bytes, content_type)
+            else:
+                # Already a publicly accessible URL — use directly
+                fal_url = image_url.strip()
+        elif image_file and image_file.filename:
+            content = await image_file.read()
+            fal_url = await upload_to_fal_storage(content, image_file.content_type or "image/png")
+        else:
+            return {"error": "No image provided"}
+
+        image_size = compute_fal_image_size(aspect_ratio, output_resolution)
+        payload = {
+            "prompt": prompt,
+            "image_urls": [fal_url],
+            "image_size": image_size,
+            "quality": "high",
+            "output_format": output_format,
+            "num_images": 1,
+        }
+        async with httpx.AsyncClient(timeout=120.0) as http:
+            resp = await http.post(
+                f"{FAL_BASE_URL}/openai/gpt-image-2/edit",
+                json=payload,
+                headers={"Authorization": f"Key {FAL_KEY}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        images = data.get("images", [])
+        if not images:
+            return {"error": "No images returned from Fal.AI"}
+
+        return {
+            "message": "Image edited successfully",
+            "prompt": prompt,
+            "image_url": images[0]["url"],
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@api.post("/fal/compose_images")
+async def fal_compose_images(
+    prompt: str = Form(...),
+    aspect_ratio: str = Form(default="1:1"),
+    output_resolution: str = Form(default="1K"),
+    output_format: str = Form(default="png"),
+    image_urls: str = Form(default=""),          # JSON array of URL / data: URI strings
+    image_files: List[UploadFile] = File(default=[])
+):
+    if not FAL_KEY:
+        return {"error": "FAL_KEY environment variable is not configured"}
+    try:
+        fal_urls = []
+
+        # Resolve URL / data-URI images
+        if image_urls.strip():
+            try:
+                url_list = json.loads(image_urls)
+                for url in url_list:
+                    if url.startswith("data:"):
+                        header, b64data = url.split(",", 1)
+                        content_type = header.split(";")[0].split(":")[1]
+                        image_bytes = base64.b64decode(b64data)
+                        fal_urls.append(await upload_to_fal_storage(image_bytes, content_type))
+                    else:
+                        fal_urls.append(url)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Upload file attachments
+        for image_file in image_files:
+            if image_file.filename:
+                content = await image_file.read()
+                fal_urls.append(await upload_to_fal_storage(content, image_file.content_type or "image/png"))
+
+        if not fal_urls:
+            return {"error": "No images provided"}
+
+        image_size = compute_fal_image_size(aspect_ratio, output_resolution)
+        payload = {
+            "prompt": prompt,
+            "image_urls": fal_urls,
+            "image_size": image_size,
+            "quality": "high",
+            "output_format": output_format,
+            "num_images": 1,
+        }
+        async with httpx.AsyncClient(timeout=120.0) as http:
+            resp = await http.post(
+                f"{FAL_BASE_URL}/openai/gpt-image-2/edit",
+                json=payload,
+                headers={"Authorization": f"Key {FAL_KEY}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        images = data.get("images", [])
+        if not images:
+            return {"error": "No images returned from Fal.AI"}
+
+        return {
+            "message": "Images composed successfully",
+            "prompt": prompt,
+            "image_url": images[0]["url"],
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+# ── Utility ───────────────────────────────────────────────────────────────────
+
 @api.get("/download_image/{image_data}")
 async def download_image(image_data: str):
     try:
-        # Decode base64 image data
         image_bytes = base64.b64decode(image_data)
-        
         return StreamingResponse(
             io.BytesIO(image_bytes),
             media_type="image/png",
@@ -569,10 +583,10 @@ async def download_image(image_data: str):
     except Exception as e:
         return {"error": str(e)}
 
-# Mount API sub-application first
+
+# ── Mount apps ────────────────────────────────────────────────────────────────
 app.mount("/api", api, name="api")
 
-# Mount React frontend at root - API routes are now protected under /api
 try:
     app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
 except Exception as e:
