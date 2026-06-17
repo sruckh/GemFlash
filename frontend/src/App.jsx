@@ -19,6 +19,24 @@ import { EnhancedImageCard } from "./components/EnhancedImageCard";
 import { ProcessingProgress } from "./components/ProcessingProgress";
 import { EnhancedImageUpload } from "./components/EnhancedImageUpload";
 
+function startFalPolling(statusUrl, responseUrl, intervalMs, onComplete, onError) {
+  const doPoll = async () => {
+    try {
+      const resp = await fetch(
+        `/api/fal/poll?status_url=${encodeURIComponent(statusUrl)}&response_url=${encodeURIComponent(responseUrl)}`
+      )
+      const data = await resp.json()
+      if (data.error) return onError(data.error)
+      if (data.status === 'COMPLETED') return onComplete(data.image_url)
+      if (data.status === 'FAILED') return onError(data.error || 'Generation failed')
+      setTimeout(doPoll, intervalMs)
+    } catch (err) {
+      onError('Polling error: ' + err.message)
+    }
+  }
+  setTimeout(doPoll, intervalMs)
+}
+
 function App() {
   // Provider state
   const [provider, setProvider] = useState("nano_banana")
@@ -151,7 +169,8 @@ function App() {
         return prev + 10
       })
     }, 500)
-    
+
+    let stillPolling = false
     try {
       const endpoint = provider === 'gpt_image_2' ? '/api/fal/generate_image' : '/api/generate_image'
       const response = await fetch(endpoint, {
@@ -171,6 +190,27 @@ function App() {
       
       if (data.error) {
         toast.error(data.error)
+      } else if (data.status === 'queued') {
+        stillPolling = true
+        const _prompt = generatePrompt, _ratio = generateAspectRatio, _res = generateResolution
+        startFalPolling(data.status_url, data.response_url, 15000,
+          (imageUrl) => {
+            setGeneratedImages(prev => [{
+              id: Date.now(), src: imageUrl, imageType: 'url',
+              prompt: _prompt, aspect_ratio: _ratio, resolution: _res,
+              type: 'generated', timestamp: new Date()
+            }, ...prev])
+            setGeneratePrompt("")
+            toast.success("Image generated successfully!")
+            setLoading(false); setIsGenerating(false)
+            setTimeout(() => setProcessingProgress(0), 1000)
+          },
+          (errMsg) => {
+            toast.error(errMsg)
+            setLoading(false); setIsGenerating(false)
+            setTimeout(() => setProcessingProgress(0), 1000)
+          }
+        )
       } else if (data.image_url) {
         // Fal.AI returns a hosted URL
         const newImage = {
@@ -208,9 +248,11 @@ function App() {
     } catch (err) {
       toast.error("Failed to generate image: " + err.message)
     } finally {
-      setLoading(false)
-      setIsGenerating(false)
-      setTimeout(() => setProcessingProgress(0), 1000)
+      if (!stillPolling) {
+        setLoading(false)
+        setIsGenerating(false)
+        setTimeout(() => setProcessingProgress(0), 1000)
+      }
     }
   }
 
@@ -242,7 +284,8 @@ function App() {
         return prev + 10
       })
     }, 600)
-    
+
+    let stillPolling = false
     try {
       const formData = new FormData()
       formData.append('prompt', editPrompt)
@@ -286,6 +329,30 @@ function App() {
       
       if (data.error) {
         toast.error(data.error)
+      } else if (data.status === 'queued') {
+        stillPolling = true
+        const _prompt = editPrompt, _orig = selectedImageForEdit
+        startFalPolling(data.status_url, data.response_url, 15000,
+          (imageUrl) => {
+            const newImage = {
+              id: Date.now(), src: imageUrl, imageType: 'url',
+              prompt: _prompt, type: 'edited', originalImage: _orig, timestamp: new Date()
+            }
+            setEditedImages(prev => [newImage, ...prev])
+            setSelectedImageForEdit(newImage)
+            setEditImage(null)
+            setEditImageUrl(imageUrl)
+            setEditPrompt("")
+            toast.success("Image edited successfully!")
+            setLoading(false); setIsEditing(false)
+            setTimeout(() => setProcessingProgress(0), 1000)
+          },
+          (errMsg) => {
+            toast.error(errMsg)
+            setLoading(false); setIsEditing(false)
+            setTimeout(() => setProcessingProgress(0), 1000)
+          }
+        )
       } else if (data.image_url) {
         // Fal.AI result
         const newImage = {
@@ -332,9 +399,11 @@ function App() {
       console.error("Edit image error:", err)
       toast.error("Failed to edit image: " + err.message)
     } finally {
-      setLoading(false)
-      setIsEditing(false)
-      setTimeout(() => setProcessingProgress(0), 1000)
+      if (!stillPolling) {
+        setLoading(false)
+        setIsEditing(false)
+        setTimeout(() => setProcessingProgress(0), 1000)
+      }
     }
   }
 
@@ -367,7 +436,8 @@ function App() {
         return prev + 10
       })
     }, 700)
-    
+
+    let stillPolling = false
     try {
       const formData = new FormData()
       formData.append('prompt', composePrompt)
@@ -406,6 +476,27 @@ function App() {
       
       if (data.error) {
         toast.error(data.error)
+      } else if (data.status === 'queued') {
+        stillPolling = true
+        const _prompt = composePrompt
+        startFalPolling(data.status_url, data.response_url, 15000,
+          (imageUrl) => {
+            setComposedImages(prev => [{
+              id: Date.now(), src: imageUrl, imageType: 'url',
+              prompt: _prompt, type: 'composed', timestamp: new Date()
+            }, ...prev])
+            setComposePrompt("")
+            setSelectedForCompose(new Set())
+            toast.success("Images composed successfully!")
+            setLoading(false); setIsComposing(false)
+            setTimeout(() => setProcessingProgress(0), 1000)
+          },
+          (errMsg) => {
+            toast.error(errMsg)
+            setLoading(false); setIsComposing(false)
+            setTimeout(() => setProcessingProgress(0), 1000)
+          }
+        )
       } else if (data.image_url) {
         // Fal.AI result
         const newImage = {
@@ -441,9 +532,11 @@ function App() {
     } catch (err) {
       toast.error("Failed to compose images: " + err.message)
     } finally {
-      setLoading(false)
-      setIsComposing(false)
-      setTimeout(() => setProcessingProgress(0), 1000)
+      if (!stillPolling) {
+        setLoading(false)
+        setIsComposing(false)
+        setTimeout(() => setProcessingProgress(0), 1000)
+      }
     }
   }
 

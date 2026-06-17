@@ -3,3 +3,5 @@ uvicorn
 gunicorn
 google-genai
 python-multipart
+httpx
+fal-client

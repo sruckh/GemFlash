@@ -45,6 +45,7 @@ client = genai.Client(
 # ── Fal.AI configuration ─────────────────────────────────────────────────────
 FAL_KEY = os.environ.get("FAL_KEY", "")
 FAL_BASE_URL = "https://fal.run"
+FAL_QUEUE_URL = "https://queue.fal.run"
 FAL_STORAGE_URL = "https://storage.fal.ai/upload"
 
 # Aspect ratio numerators/denominators used to compute Fal.AI image sizes
@@ -114,18 +115,9 @@ def compute_fal_image_size(aspect_ratio: str, resolution: str) -> dict:
 
 
 async def upload_to_fal_storage(image_bytes: bytes, content_type: str = "image/png") -> str:
-    """Upload raw image bytes to Fal.AI storage and return the hosted URL."""
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        resp = await http.post(
-            FAL_STORAGE_URL,
-            content=image_bytes,
-            headers={
-                "Authorization": f"Key {FAL_KEY}",
-                "Content-Type": content_type,
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["url"]
+    """Upload raw image bytes to Fal CDN (v3.fal.media) via fal_client."""
+    import fal_client
+    return await fal_client.upload_async(image_bytes, content_type)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -410,24 +402,24 @@ async def fal_generate_image(request: ImageGenerationRequest):
             "output_format": request.output_format,
             "num_images": 1,
         }
-        async with httpx.AsyncClient(timeout=120.0) as http:
+        model_path = "openai/gpt-image-2"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
             resp = await http.post(
-                f"{FAL_BASE_URL}/openai/gpt-image-2",
+                f"{FAL_QUEUE_URL}/{model_path}",
                 json=payload,
                 headers={"Authorization": f"Key {FAL_KEY}"},
             )
             resp.raise_for_status()
             data = resp.json()
 
-        images = data.get("images", [])
-        if not images:
-            return {"error": "No images returned from Fal.AI"}
-
+        print(f"[FAL submit generate] response keys: {list(data.keys())}, status_url={data.get('status_url')}")
+        status_url = data.get("status_url") or f"{FAL_QUEUE_URL}/{model_path}/requests/{data['request_id']}/status"
+        response_url = data.get("response_url") or f"{FAL_QUEUE_URL}/{model_path}/requests/{data['request_id']}"
         return {
-            "message": "Image generated successfully",
-            "prompt": request.prompt,
-            "aspect_ratio": request.aspect_ratio,
-            "image_url": images[0]["url"],
+            "status": "queued",
+            "request_id": data["request_id"],
+            "status_url": status_url,
+            "response_url": response_url,
         }
     except Exception as e:
         import traceback
@@ -451,13 +443,11 @@ async def fal_edit_image(
 
         if image_url.strip():
             if image_url.startswith("data:"):
-                # Decode base64 data URI and upload to Fal.AI storage
+                # Decode and upload to fal CDN — avoids large base64 payload to FAL
                 header, b64data = image_url.split(",", 1)
                 content_type = header.split(";")[0].split(":")[1]
-                image_bytes = base64.b64decode(b64data)
-                fal_url = await upload_to_fal_storage(image_bytes, content_type)
+                fal_url = await upload_to_fal_storage(base64.b64decode(b64data), content_type)
             else:
-                # Already a publicly accessible URL — use directly
                 fal_url = image_url.strip()
         elif image_file and image_file.filename:
             content = await image_file.read()
@@ -474,23 +464,24 @@ async def fal_edit_image(
             "output_format": output_format,
             "num_images": 1,
         }
-        async with httpx.AsyncClient(timeout=120.0) as http:
+        model_path = "openai/gpt-image-2/edit"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
             resp = await http.post(
-                f"{FAL_BASE_URL}/openai/gpt-image-2/edit",
+                f"{FAL_QUEUE_URL}/{model_path}",
                 json=payload,
                 headers={"Authorization": f"Key {FAL_KEY}"},
             )
             resp.raise_for_status()
             data = resp.json()
 
-        images = data.get("images", [])
-        if not images:
-            return {"error": "No images returned from Fal.AI"}
-
+        print(f"[FAL submit edit] response keys: {list(data.keys())}, status_url={data.get('status_url')}")
+        status_url = data.get("status_url") or f"{FAL_QUEUE_URL}/{model_path}/requests/{data['request_id']}/status"
+        response_url = data.get("response_url") or f"{FAL_QUEUE_URL}/{model_path}/requests/{data['request_id']}"
         return {
-            "message": "Image edited successfully",
-            "prompt": prompt,
-            "image_url": images[0]["url"],
+            "status": "queued",
+            "request_id": data["request_id"],
+            "status_url": status_url,
+            "response_url": response_url,
         }
     except Exception as e:
         import traceback
@@ -512,7 +503,7 @@ async def fal_compose_images(
     try:
         fal_urls = []
 
-        # Resolve URL / data-URI images
+        # Resolve URL / data-URI images — upload data URIs to CDN, pass https:// directly
         if image_urls.strip():
             try:
                 url_list = json.loads(image_urls)
@@ -520,14 +511,13 @@ async def fal_compose_images(
                     if url.startswith("data:"):
                         header, b64data = url.split(",", 1)
                         content_type = header.split(";")[0].split(":")[1]
-                        image_bytes = base64.b64decode(b64data)
-                        fal_urls.append(await upload_to_fal_storage(image_bytes, content_type))
+                        fal_urls.append(await upload_to_fal_storage(base64.b64decode(b64data), content_type))
                     else:
                         fal_urls.append(url)
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        # Upload file attachments
+        # Upload file attachments to fal CDN
         for image_file in image_files:
             if image_file.filename:
                 content = await image_file.read()
@@ -545,24 +535,71 @@ async def fal_compose_images(
             "output_format": output_format,
             "num_images": 1,
         }
-        async with httpx.AsyncClient(timeout=120.0) as http:
+        model_path = "openai/gpt-image-2/edit"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
             resp = await http.post(
-                f"{FAL_BASE_URL}/openai/gpt-image-2/edit",
+                f"{FAL_QUEUE_URL}/{model_path}",
                 json=payload,
                 headers={"Authorization": f"Key {FAL_KEY}"},
             )
             resp.raise_for_status()
             data = resp.json()
 
-        images = data.get("images", [])
-        if not images:
-            return {"error": "No images returned from Fal.AI"}
-
+        print(f"[FAL submit compose] response keys: {list(data.keys())}, status_url={data.get('status_url')}")
+        status_url = data.get("status_url") or f"{FAL_QUEUE_URL}/{model_path}/requests/{data['request_id']}/status"
+        response_url = data.get("response_url") or f"{FAL_QUEUE_URL}/{model_path}/requests/{data['request_id']}"
         return {
-            "message": "Images composed successfully",
-            "prompt": prompt,
-            "image_url": images[0]["url"],
+            "status": "queued",
+            "request_id": data["request_id"],
+            "status_url": status_url,
+            "response_url": response_url,
         }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@api.get("/fal/poll")
+async def fal_poll(status_url: str, response_url: str):
+    if not FAL_KEY:
+        return {"error": "FAL_KEY environment variable is not configured"}
+    try:
+        print(f"[FAL poll] status_url={status_url}")
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
+            status_resp = await http.get(
+                status_url,
+                headers={"Authorization": f"Key {FAL_KEY}"},
+            )
+            status_resp.raise_for_status()
+            status_data = status_resp.json()
+            status = status_data.get("status", "UNKNOWN")
+            print(f"[FAL poll] status={status}")
+
+            if status == "COMPLETED":
+                result_resp = await http.get(
+                    response_url,
+                    headers={"Authorization": f"Key {FAL_KEY}"},
+                )
+                if not result_resp.is_success:
+                    # FAL completed but result fetch failed (e.g. downstream error)
+                    try:
+                        err_data = result_resp.json()
+                        msg = err_data.get("detail", [{}])
+                        if isinstance(msg, list) and msg:
+                            msg = msg[0].get("msg", "Generation failed on FAL")
+                        return {"status": "FAILED", "error": str(msg)}
+                    except Exception:
+                        return {"status": "FAILED", "error": f"Result fetch failed: HTTP {result_resp.status_code}"}
+                result_data = result_resp.json()
+                images = result_data.get("images", [])
+                if not images:
+                    return {"status": "FAILED", "error": "No images in result"}
+                return {"status": "COMPLETED", "image_url": images[0]["url"]}
+            elif status in ("FAILED", "ERROR"):
+                return {"status": "FAILED", "error": status_data.get("error", "Generation failed")}
+            else:
+                return {"status": status}
     except Exception as e:
         import traceback
         traceback.print_exc()
