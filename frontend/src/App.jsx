@@ -17,13 +17,15 @@ import { UrlInputDialog } from "./components/UrlInputDialog";
 import { ToastProvider, toast } from "./components/ToastProvider";
 import { EnhancedImageCard } from "./components/EnhancedImageCard";
 import { ProcessingProgress } from "./components/ProcessingProgress";
-import { EnhancedImageUpload } from "./components/EnhancedImageUpload";
+import { EnhancedImageUpload } from "./components/EnhancedImageUpload"
+import { LoginScreen } from "./components/LoginScreen";
 
-function startFalPolling(statusUrl, responseUrl, intervalMs, onComplete, onError) {
+function startFalPolling(statusUrl, responseUrl, intervalMs, onComplete, onError, token) {
   const doPoll = async () => {
     try {
       const resp = await fetch(
-        `/api/fal/poll?status_url=${encodeURIComponent(statusUrl)}&response_url=${encodeURIComponent(responseUrl)}`
+        `/api/fal/poll?status_url=${encodeURIComponent(statusUrl)}&response_url=${encodeURIComponent(responseUrl)}`,
+        { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
       )
       const data = await resp.json()
       if (data.error) return onError(data.error)
@@ -38,6 +40,26 @@ function startFalPolling(statusUrl, responseUrl, intervalMs, onComplete, onError
 }
 
 function App() {
+  // Auth state
+  const [token, setToken] = useState(() => localStorage.getItem('gemflash_token'))
+
+  const handleLogin = (newToken) => {
+    localStorage.setItem('gemflash_token', newToken)
+    setToken(newToken)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('gemflash_token')
+    setToken(null)
+  }
+
+  const authHeader = () => token ? { 'Authorization': `Bearer ${token}` } : {}
+
+  const handleAuthError = () => {
+    localStorage.removeItem('gemflash_token')
+    setToken(null)
+  }
+
   // Provider state
   const [provider, setProvider] = useState("nano_banana")
 
@@ -175,7 +197,7 @@ function App() {
       const endpoint = provider === 'gpt_image_2' ? '/api/fal/generate_image' : '/api/generate_image'
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
           prompt: generatePrompt,
           aspect_ratio: generateAspectRatio,
@@ -183,6 +205,7 @@ function App() {
           output_format: generateOutputFormat
         }),
       })
+      if (response.status === 401) { handleAuthError(); return; }
       
       const data = await response.json()
       clearInterval(progressInterval)
@@ -209,7 +232,8 @@ function App() {
             toast.error(errMsg)
             setLoading(false); setIsGenerating(false)
             setTimeout(() => setProcessingProgress(0), 1000)
-          }
+          },
+          token
         )
       } else if (data.image_url) {
         // Fal.AI returns a hosted URL
@@ -318,7 +342,8 @@ function App() {
         }
       }
       
-      const response = await fetch(endpoint, { method: 'POST', body: formData })
+      const response = await fetch(endpoint, { method: 'POST', body: formData, headers: authHeader() })
+      if (response.status === 401) { handleAuthError(); return; }
       const data = await response.json()
       clearInterval(progressInterval)
       setProcessingProgress(100)
@@ -351,7 +376,8 @@ function App() {
             toast.error(errMsg)
             setLoading(false); setIsEditing(false)
             setTimeout(() => setProcessingProgress(0), 1000)
-          }
+          },
+          token
         )
       } else if (data.image_url) {
         // Fal.AI result
@@ -469,7 +495,8 @@ function App() {
         })
       }
       
-      const response = await fetch(endpoint, { method: 'POST', body: formData })
+      const response = await fetch(endpoint, { method: 'POST', body: formData, headers: authHeader() })
+      if (response.status === 401) { handleAuthError(); return; }
       const data = await response.json()
       clearInterval(progressInterval)
       setProcessingProgress(100)
@@ -495,7 +522,8 @@ function App() {
             toast.error(errMsg)
             setLoading(false); setIsComposing(false)
             setTimeout(() => setProcessingProgress(0), 1000)
-          }
+          },
+          token
         )
       } else if (data.image_url) {
         // Fal.AI result
@@ -769,6 +797,10 @@ function App() {
     }
   }
 
+  if (!token) {
+    return <LoginScreen onLogin={handleLogin} />
+  }
+
   return (
     <ToastProvider>
       <ProcessingProgress
@@ -792,7 +824,7 @@ function App() {
                 {provider === 'gpt_image_2' ? 'Powered by GPT Image 2' : 'Powered by Nano Banana 2'}
               </p>
             </div>
-            {/* Provider selector */}
+            {/* Provider selector + logout */}
             <div className="ml-auto flex items-center gap-3">
               <span className="text-sm text-muted-foreground hidden sm:block">Provider:</span>
               <div className="flex rounded-lg border border-border overflow-hidden">
@@ -810,6 +842,13 @@ function App() {
                   </button>
                 ))}
               </div>
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border transition-colors hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                title="Sign out"
+              >
+                Sign out
+              </button>
             </div>
           </div>
         </div>

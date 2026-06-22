@@ -1,6 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import google.genai as genai
 from google.genai import types
@@ -11,6 +12,8 @@ import io
 import json
 import math
 import requests
+import jwt
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 # Create main app
@@ -41,6 +44,39 @@ client = genai.Client(
         client_args={'timeout': httpx.Timeout(120.0, connect=60.0)}
     )
 )
+
+# ── Auth configuration ────────────────────────────────────────────────────────
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+SECRET_KEY = os.environ.get("SECRET_KEY", "changeme-please-set-in-env")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 24
+
+security = HTTPBearer()
+
+
+class LoginRequest(BaseModel):
+    password: str
+
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> None:
+    try:
+        jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@api.post("/auth/login")
+async def login(request: LoginRequest):
+    if not APP_PASSWORD:
+        raise HTTPException(status_code=500, detail="APP_PASSWORD not configured on server")
+    if request.password != APP_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid password")
+    expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
+    token = jwt.encode({"sub": "user", "exp": expire}, SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return {"access_token": token, "token_type": "bearer"}
+
 
 # ── Fal.AI configuration ─────────────────────────────────────────────────────
 FAL_KEY = os.environ.get("FAL_KEY", "")
@@ -173,7 +209,7 @@ def process_image_response(response):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api.post("/generate_image")
-async def generate_image(request: ImageGenerationRequest):
+async def generate_image(request: ImageGenerationRequest, _: None = Depends(verify_token)):
     try:
         aspect_ratio_info = {
             "1:1":  {"cinematic": "centered square composition"},
@@ -239,7 +275,8 @@ async def edit_image(
     output_resolution: str = Form(default="1K"),
     output_format: str = Form(default="png"),
     image_urls: str = Form(default=""),
-    image_file: UploadFile = File(default=None)
+    image_file: UploadFile = File(default=None),
+    _: None = Depends(verify_token)
 ):
     try:
         if not image_urls.strip() and (not image_file or not image_file.filename):
@@ -322,7 +359,8 @@ async def compose_images(
     aspect_ratio: str = Form(default="1:1"),
     output_resolution: str = Form(default="1K"),
     output_format: str = Form(default="png"),
-    image_files: List[UploadFile] = File(default=[])
+    image_files: List[UploadFile] = File(default=[]),
+    _: None = Depends(verify_token)
 ):
     try:
         parts = []
@@ -390,7 +428,7 @@ Output: Return ONLY the final composed image. Do not return text."""
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @api.post("/fal/generate_image")
-async def fal_generate_image(request: ImageGenerationRequest):
+async def fal_generate_image(request: ImageGenerationRequest, _: None = Depends(verify_token)):
     if not FAL_KEY:
         return {"error": "FAL_KEY environment variable is not configured"}
     try:
@@ -434,7 +472,8 @@ async def fal_edit_image(
     output_resolution: str = Form(default="1K"),
     output_format: str = Form(default="png"),
     image_url: str = Form(default=""),       # https:// URL or data: URI
-    image_file: UploadFile = File(default=None)
+    image_file: UploadFile = File(default=None),
+    _: None = Depends(verify_token)
 ):
     if not FAL_KEY:
         return {"error": "FAL_KEY environment variable is not configured"}
@@ -496,7 +535,8 @@ async def fal_compose_images(
     output_resolution: str = Form(default="1K"),
     output_format: str = Form(default="png"),
     image_urls: str = Form(default=""),          # JSON array of URL / data: URI strings
-    image_files: List[UploadFile] = File(default=[])
+    image_files: List[UploadFile] = File(default=[]),
+    _: None = Depends(verify_token)
 ):
     if not FAL_KEY:
         return {"error": "FAL_KEY environment variable is not configured"}
@@ -561,7 +601,7 @@ async def fal_compose_images(
 
 
 @api.get("/fal/poll")
-async def fal_poll(status_url: str, response_url: str):
+async def fal_poll(status_url: str, response_url: str, _: None = Depends(verify_token)):
     if not FAL_KEY:
         return {"error": "FAL_KEY environment variable is not configured"}
     try:
@@ -609,7 +649,7 @@ async def fal_poll(status_url: str, response_url: str):
 # ── Utility ───────────────────────────────────────────────────────────────────
 
 @api.get("/download_image/{image_data}")
-async def download_image(image_data: str):
+async def download_image(image_data: str, _: None = Depends(verify_token)):
     try:
         image_bytes = base64.b64decode(image_data)
         return StreamingResponse(
