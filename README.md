@@ -97,11 +97,13 @@ cp .env.example .env
 | `GEMINI_API_KEY` | Alternative | Alternative name for Google API key |
 | `GEMINI_MODEL` | No | Gemini model ID (default: `gemini-3.1-flash-image`) |
 | `FAL_KEY` | For GPT Image 2 | Fal.AI API key |
+| `APP_PASSWORD` | Yes | Password required on the login screen |
+| `SECRET_KEY` | Yes | Long random string used to sign JWT tokens — must be kept secret |
 | `NODE_ENV` | No | Node environment (default: `development`) |
 | `PORT` | No | Backend port (default: `8000`) |
 | `NETWORK_NAME` | No | Docker network name (default: `shared_net`) |
 
-Example `.env`:
+Example `.env` (see `.env.example` for a copy-paste template):
 
 ```env
 # Google Gemini API (Nano Banana)
@@ -110,6 +112,10 @@ GEMINI_MODEL="gemini-3.1-flash-image"
 
 # Fal.AI (GPT Image 2)
 FAL_KEY="your_fal_api_key_here"
+
+# Authentication
+APP_PASSWORD="choose-a-strong-password"
+SECRET_KEY="replace-with-a-long-random-secret-string"
 
 # Application
 NODE_ENV="development"
@@ -191,11 +197,23 @@ Nano Banana's output format is determined automatically by the Gemini API.
 
 ## API Endpoints
 
+All endpoints (except `/api/auth/login`) require an `Authorization: Bearer <token>` header.
+
+### Authentication
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+{ "password": "your_app_password" }
+→ { "access_token": "...", "token_type": "bearer" }
+```
+
 ### Nano Banana (Google Gemini)
 
 ```http
 POST /api/generate_image
 Content-Type: application/json
+Authorization: Bearer <token>
 { "prompt": "...", "aspect_ratio": "16:9", "output_resolution": "2K", "output_format": "png" }
 
 POST /api/edit_image          (multipart/form-data)
@@ -207,6 +225,7 @@ POST /api/compose_images      (multipart/form-data)
 ```http
 POST /api/fal/generate_image
 Content-Type: application/json
+Authorization: Bearer <token>
 { "prompt": "...", "aspect_ratio": "16:9", "output_resolution": "2K", "output_format": "png" }
 
 POST /api/fal/edit_image      (multipart/form-data — accepts image_url or image_file)
@@ -232,9 +251,12 @@ Fal.AI responses return `image_url` (hosted CDN URL). Nano Banana responses retu
 
 ## Security
 
-- API keys stored in `.env` (excluded via `.gitignore`)
-- Keys read server-side only — never exposed to the browser
-- All external API calls made from the backend container
+- **Login required**: All API endpoints are protected by JWT authentication. A password must be entered on the login screen before any image operations are available.
+- **JWT tokens**: Issued on successful login, stored in `localStorage`, and sent as `Authorization: Bearer` headers on every API request. Tokens expire after 24 hours.
+- **Password & secret**: `APP_PASSWORD` and `SECRET_KEY` are read from `.env` at startup — never hardcoded. Use a strong, unique value for each.
+- **API keys stored in `.env`**: Excluded via `.gitignore` — never committed to the repository.
+- **Keys are server-side only**: Google and Fal.AI API keys are never sent to the browser.
+- **All external API calls made from the backend container**.
 
 See [CONDUCTOR.md](./CONDUCTOR.md) for full security guidelines.
 
@@ -280,6 +302,9 @@ docker compose up --build -d     # Rebuild after code changes
 ## Changelog
 
 ### Latest
+- **JWT Authentication**: Password-protected login screen gates all API access. `APP_PASSWORD` and `SECRET_KEY` configured via `.env`. Tokens expire after 24 hours; "Sign out" button in the header clears the session.
+
+### Previous
 - **Fal.AI / GPT Image 2 integration**: Added global provider toggle; new `/api/fal/*` endpoints; image size computation for Fal.AI constraints; automatic Fal.AI storage upload for edit/compose
 - **Output format**: jpeg/png/webp selector added for GPT Image 2 provider
 - **Resolution**: 1K/2K/4K exposed in UI for both providers
