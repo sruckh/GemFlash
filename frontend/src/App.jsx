@@ -164,7 +164,7 @@ function App() {
   ]
 
   const providers = [
-    { value: "nano_banana", label: "Nano Banana 2" },
+    { value: "nano_banana", label: "Nano Banana 2.1" },
     { value: "gpt_image_2", label: "GPT Image 2" },
   ]
 

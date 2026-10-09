@@ -6,7 +6,7 @@ A modern web application for AI-powered image generation, editing, and compositi
 
 ### Provider Selection
 Switch between AI providers at any time using the header toggle:
-- **Nano Banana 2** — Google's `gemini-3.1-flash-image`, fast and high-quality
+- **Nano Banana 2.1** — Google's `gemini-nano-banana-2.1`, fast and high-quality
 - **GPT Image 2** — OpenAI's latest image model served through Fal.AI, with jpeg/png/webp output format control
 
 ### Generate Tab
@@ -58,7 +58,7 @@ Combine multiple images into new, cohesive compositions:
 ### AI Models
 | Provider | Model ID | Used For |
 |----------|----------|----------|
-| Nano Banana 2 | `gemini-3.1-flash-image` | Default Gemini model |
+| Nano Banana 2.1 | `gemini-nano-banana-2.1` | Default Gemini model |
 | Nano Banana Pro | `gemini-3-pro-image` | Higher quality Gemini |
 | GPT Image 2 | `openai/gpt-image-2` (via Fal.AI) | OpenAI model via Fal.AI |
 
@@ -95,7 +95,7 @@ cp .env.example .env
 |----------|----------|-------------|
 | `GOOGLE_API_KEY` | Yes | Google Gemini API key for Nano Banana |
 | `GEMINI_API_KEY` | Alternative | Alternative name for Google API key |
-| `GEMINI_MODEL` | No | Gemini model ID (default: `gemini-3.1-flash-image`) |
+| `GEMINI_MODEL` | No | Gemini model ID (default: `gemini-nano-banana-2.1`) |
 | `FAL_KEY` | For GPT Image 2 | Fal.AI API key |
 | `APP_PASSWORD` | Yes | Password required on the login screen |
 | `SECRET_KEY` | Yes | Long random string used to sign JWT tokens — must be kept secret |
@@ -108,7 +108,7 @@ Example `.env` (see `.env.example` for a copy-paste template):
 ```env
 # Google Gemini API (Nano Banana)
 GOOGLE_API_KEY="your_google_api_key_here"
-GEMINI_MODEL="gemini-3.1-flash-image"
+GEMINI_MODEL="gemini-nano-banana-2.1"
 
 # Fal.AI (GPT Image 2)
 FAL_KEY="your_fal_api_key_here"

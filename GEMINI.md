@@ -10,7 +10,7 @@ This document outlines the purpose, security considerations, and operational gui
 
 ## Supported Models
 
-*   **Nano Banana 2**: `gemini-3.1-flash-image`
+*   **Nano Banana 2.1**: `gemini-nano-banana-2.1`
 *   **Nano Banana Pro**: `gemini-3-pro-image`
 *   **Gemini Flash**: `gemini-flash-latest`
 

@@ -31,7 +31,7 @@ if not api_key:
     raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY environment variable is required")
 
 GEMINI_MODELS = {
-    "nano_banana_2": "gemini-3.1-flash-image",
+    "nano_banana_2": "gemini-nano-banana-2.1",
     "nano_banana_pro": "gemini-3-pro-image",
     "gemini_flash": "gemini-flash-latest",
 }
