@@ -59,3 +59,12 @@ coordination/orchestration/*
 claude-flow
 # Removed Windows wrapper files per user request
 hive-mind-prompt-*.txt
+
+# AI tooling / agent state (local only)
+.claude/
+.claude-flow/
+.claude-flow-backup-*/
+.serena/
+.genkit/
+.gemini/
+.kombai/
