@@ -1,5 +1,6 @@
 services:
   gemflash:
+    restart: unless-stopped
     build: .
     networks:
       - shared_net
