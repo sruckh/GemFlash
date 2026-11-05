@@ -60,7 +60,7 @@ Combine multiple images into new, cohesive compositions:
 |----------|----------|----------|
 | Nano Banana 2.1 | `gemini-nano-banana-2.1` | Default Gemini model |
 | Nano Banana Pro | `gemini-3-pro-image` | Higher quality Gemini |
-| GPT Image 2 | `openai/gpt-image-2` (via Fal.AI) | OpenAI model via Fal.AI |
+| GPT Image 2.6 | `openai/gpt-image-2.6/flare/*` (via Fal.AI) | OpenAI model via Fal.AI |
 
 ### DevOps
 - **Docker** with multi-stage builds
@@ -247,7 +247,7 @@ Fal.AI responses return `image_url` (hosted CDN URL). Nano Banana responses retu
 | Nano Banana 2 | 1K | 10–20 s |
 | Nano Banana 2 | 2K | 20–40 s |
 | Nano Banana 2 | 4K | 30–60 s |
-| GPT Image 2 | 1K–4K | 15–45 s |
+| GPT Image 2.6 | 1K–4K | 15–45 s |
 
 ## Security
 

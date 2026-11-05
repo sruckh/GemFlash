@@ -93,6 +93,16 @@ _ASPECT_RATIOS = {
 }
 
 
+def check_fal_response(resp, model_path: str, payload: dict) -> None:
+    """Raise with FAL's full error body (and log the submitted payload) on a non-2xx response."""
+    if resp.is_success:
+        return
+    print(f"[FAL submit ERROR] model={model_path} http={resp.status_code}")
+    print(f"[FAL submit ERROR] payload={json.dumps(payload, default=str)}")
+    print(f"[FAL submit ERROR] response_body={resp.text[:2000]}")
+    raise RuntimeError(f"FAL HTTP {resp.status_code}: {resp.text[:1000]}")
+
+
 def compute_fal_image_size(aspect_ratio: str, resolution: str) -> dict:
     """
     Map an aspect ratio + resolution label to a valid Fal.AI {width, height}.
@@ -440,14 +450,14 @@ async def fal_generate_image(request: ImageGenerationRequest, _: None = Depends(
             "output_format": request.output_format,
             "num_images": 1,
         }
-        model_path = "openai/gpt-image-2"
+        model_path = "openai/gpt-image-2.6/flare/text-to-image"
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
             resp = await http.post(
                 f"{FAL_QUEUE_URL}/{model_path}",
                 json=payload,
                 headers={"Authorization": f"Key {FAL_KEY}"},
             )
-            resp.raise_for_status()
+            check_fal_response(resp, model_path, payload)
             data = resp.json()
 
         print(f"[FAL submit generate] response keys: {list(data.keys())}, status_url={data.get('status_url')}")
@@ -503,14 +513,14 @@ async def fal_edit_image(
             "output_format": output_format,
             "num_images": 1,
         }
-        model_path = "openai/gpt-image-2/edit"
+        model_path = "openai/gpt-image-2.6/flare/edit"
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
             resp = await http.post(
                 f"{FAL_QUEUE_URL}/{model_path}",
                 json=payload,
                 headers={"Authorization": f"Key {FAL_KEY}"},
             )
-            resp.raise_for_status()
+            check_fal_response(resp, model_path, payload)
             data = resp.json()
 
         print(f"[FAL submit edit] response keys: {list(data.keys())}, status_url={data.get('status_url')}")
@@ -575,14 +585,14 @@ async def fal_compose_images(
             "output_format": output_format,
             "num_images": 1,
         }
-        model_path = "openai/gpt-image-2/edit"
+        model_path = "openai/gpt-image-2.6/flare/edit"
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as http:
             resp = await http.post(
                 f"{FAL_QUEUE_URL}/{model_path}",
                 json=payload,
                 headers={"Authorization": f"Key {FAL_KEY}"},
             )
-            resp.raise_for_status()
+            check_fal_response(resp, model_path, payload)
             data = resp.json()
 
         print(f"[FAL submit compose] response keys: {list(data.keys())}, status_url={data.get('status_url')}")
@@ -623,6 +633,7 @@ async def fal_poll(status_url: str, response_url: str, _: None = Depends(verify_
                 )
                 if not result_resp.is_success:
                     # FAL completed but result fetch failed (e.g. downstream error)
+                    print(f"[FAL poll ERROR] result http={result_resp.status_code} body={result_resp.text[:2000]}")
                     try:
                         err_data = result_resp.json()
                         msg = err_data.get("detail", [{}])
@@ -637,6 +648,7 @@ async def fal_poll(status_url: str, response_url: str, _: None = Depends(verify_
                     return {"status": "FAILED", "error": "No images in result"}
                 return {"status": "COMPLETED", "image_url": images[0]["url"]}
             elif status in ("FAILED", "ERROR"):
+                print(f"[FAL poll ERROR] status_data={json.dumps(status_data, default=str)[:2000]}")
                 return {"status": "FAILED", "error": status_data.get("error", "Generation failed")}
             else:
                 return {"status": status}
